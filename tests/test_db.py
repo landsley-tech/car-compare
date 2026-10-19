@@ -215,6 +215,9 @@ class DbApiTests(unittest.TestCase):
             status, body = self.get("/api/db/models?brand=" + brand)
             self.assertTrue(status == 400 or (status, body) == (200, []), brand)  # rejected, or matched literally (nothing)
 
+    def tearDown(self):
+        server.close_db()  # tests that call match_db directly open a connection on this thread
+
     def test_us_register_car_borrows_closest_database_figures(self):
         epa_m4 = {"make": "BMW", "model": "M4 Coupe", "year": 2018, "fuel": "Petrol", "cc": 2979, "drive": "RWD", "hp": None, "kg": None}
         car = server.match_db(epa_m4)
@@ -228,8 +231,11 @@ class DbApiTests(unittest.TestCase):
         self.assertEqual(self.get("/api/db/car?id=99999")[0], 404)
 
     def test_database_is_read_only(self):
-        with self.assertRaises(sqlite3.OperationalError):
-            server.db().execute("DELETE FROM engines")
+        try:
+            with self.assertRaises(sqlite3.OperationalError):
+                server.db().execute("DELETE FROM engines")
+        finally:
+            server.close_db()
 
     def test_missing_database_is_503(self):
         with mock.patch.object(server, "DB_PATH", Path("/nonexistent/cars.db")), mock.patch.object(server, "_local", threading.local()):

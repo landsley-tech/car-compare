@@ -49,19 +49,26 @@ Settings come from environment variables:
 ## Tests
 
 ```bash
-python3 -m unittest discover tests     # server, database importer + security/attack tests (49)
+python3 -m unittest discover tests     # server, database importer + security/attack tests (50)
 node --test                            # tax, race model, outlines, escaping, catalogue checks (13)
 node tests/e2e.mjs                     # drives the real page in headless Chrome (add EPA=1 for the live EPA test)
 ```
 
-The e2e test looks for Playwright's headless Chrome in `~/.cache/ms-playwright`. To use a different browser, set `CHROME=/path/to/chrome`.
+To check a running site the way the public reaches it (security headers, HTTPS, blocked attacks, speed, rate limiting):
+
+```bash
+python3 tools/check_public.py https://cars.example.com       # your public address
+python3 tools/check_public.py http://127.0.0.1:8000           # local
+```
+
+Tested on Python 3.10, 3.12 and 3.14 (Linux). The e2e test looks for Playwright's headless Chrome in `~/.cache/ms-playwright`. To use a different browser, set `CHROME=/path/to/chrome`.
 
 ## Security
 
 The server is built so that one person can't easily take it down or use it to attack anything:
 
 - **Static files** are loaded into memory at startup and served by exact path, so path traversal (`/../server.py`) is impossible.
-- **Rate limiting** gives each visitor a token bucket. Forwarded-IP headers are only believed from the local proxy named in `TRUST_PROXY`, and Caddy's are read from the end the visitor can't fake. IPv6 visitors are limited per /64 network (one home), so rotating addresses doesn't help.
+- **Rate limiting** gives each visitor a token bucket for the data API. Page files aren't limited (they come from memory), so people sharing one IP (home wifi, offices, mobile networks) can still load the site. Forwarded-IP headers are only believed from the local proxy named in `TRUST_PROXY`, and Caddy's are read from the end the visitor can't fake. IPv6 visitors are limited per /64 network (one home), so rotating addresses doesn't help.
 - **Connection caps** (total and per IP) plus a 10-second socket timeout drop slowloris-style slow connections.
 - **The EPA proxy** only talks to fueleconomy.gov. It validates every parameter against a strict pattern and caches responses for 24 h. It makes at most 4 upstream calls at a time, so your server can't be used to flood the EPA.
 - **Methods:** only GET and HEAD are accepted. Long URLs get 414.

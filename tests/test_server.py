@@ -153,16 +153,24 @@ class AttackTests(ServerCase):
 
     def test_rate_limit_and_spoofed_forwarded_for_does_not_bypass(self):
         server.limiter = server.RateLimiter(60, burst=5)
-        codes = [self.get("/", headers={"X-Forwarded-For": f"10.0.0.{i}"})[0].status for i in range(10)]
+        codes = [self.get("/api/epa/years", headers={"X-Forwarded-For": f"10.0.0.{i}"})[0].status for i in range(10)]
         self.assertEqual(codes[:5], [200] * 5)
         self.assertEqual(set(codes[5:]), {429})
+
+    def test_page_files_are_never_rate_limited(self):
+        # people sharing one IP (home wifi, office, mobile network) must still be able to load the page
+        server.limiter = server.RateLimiter(60, burst=2)
+        for _ in range(5):
+            self.get("/api/epa/years")
+        self.assertEqual(self.get("/api/epa/years")[0].status, 429)
+        self.assertEqual({self.get(p)[0].status for p in ["/", "/app.js", "/style.css", "/data/cars.json"] * 5}, {200})
 
     def test_flood_does_not_take_server_down(self):
         server.limiter = server.RateLimiter(60, burst=20)
 
         def hit(_):
             try:
-                return self.get("/")[0].status
+                return self.get("/api/epa/years")[0].status
             except OSError:
                 return "dropped"
 
@@ -195,7 +203,7 @@ class AttackTests(ServerCase):
     def test_spoofed_headers_behind_caddy_do_not_bypass_rate_limit(self):
         server.limiter = server.RateLimiter(60, burst=5)
         with mock.patch.object(server, "TRUST_PROXY", "caddy"):
-            codes = [self.get("/", headers={"X-Forwarded-For": f"10.0.0.{i}, 198.51.100.9", "CF-Connecting-IP": f"10.1.0.{i}"})[0].status
+            codes = [self.get("/api/epa/years", headers={"X-Forwarded-For": f"10.0.0.{i}, 198.51.100.9", "CF-Connecting-IP": f"10.1.0.{i}"})[0].status
                      for i in range(10)]
         self.assertEqual(set(codes[5:]), {429})
 

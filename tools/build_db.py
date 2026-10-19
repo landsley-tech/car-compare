@@ -176,7 +176,9 @@ def years_of(title, slug=""):
 
 def build(src, out):
     csv.field_size_limit(10 ** 8)
-    read = lambda f: csv.DictReader(open(src / f, encoding="utf-8", errors="replace", newline=""))
+    def read(name):
+        with open(src / name, encoding="utf-8", errors="replace", newline="") as fh:
+            yield from csv.DictReader(fh)
     brands = sorted(((re.sub(r"^https://www\.autoevolution\.com/|/$", "", b["url"]), b["name"]) for b in read("brands.csv")),
                     key=lambda x: -len(x[0]))  # longest slug first: "mercedes-amg" before "mercedes"
     out.parent.mkdir(exist_ok=True)

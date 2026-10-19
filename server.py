@@ -253,6 +253,13 @@ def db():
     return _local.db
 
 
+def close_db():
+    conn = getattr(_local, "db", None)
+    if conn:
+        conn.close()
+        _local.db = None
+
+
 DB_FUELS = set()
 
 
@@ -418,16 +425,24 @@ class Handler(BaseHTTPRequestHandler):
         self.send(code, json.dumps(obj).encode(), "application/json; charset=utf-8", cache_secs)
 
     def do_GET(self):
+        try:
+            self.handle_get()
+        finally:
+            close_db()  # each request runs on its own thread, so its connection must not outlive it
+
+    def handle_get(self):
         if len(self.path) > 1024:
             return self.send(414, b"URI too long")
-        if not limiter.allow(self.client_ip()):
-            return self.send(429, b"Too many requests, slow down")
         url = urllib.parse.urlsplit(self.path)
         if url.path in STATIC:
+            # page files come from memory and cost nothing; limiting them would block people who share an IP
+            # (homes, offices, mobile networks). They are still covered by the connection caps and timeouts.
             body, ctype = STATIC[url.path]
             return self.send(200, body, ctype, cache_secs=300)
         if not url.path.startswith("/api/"):
             return self.send(404, b"Not found")
+        if not limiter.allow(self.client_ip()):
+            return self.send_json(429, {"error": "too many requests, slow down"})
         try:
             result = api(url.path, urllib.parse.parse_qs(url.query, max_num_fields=10))
         except ValueError as e:
