@@ -46,6 +46,8 @@ Settings come from environment variables:
 | `MAX_CONN_PER_IP` | `16` | Simultaneous connections per visitor |
 | `TRUST_PROXY` | off | `cloudflare` or `caddy` when running behind that proxy on the same machine. Forwarded-IP headers are only trusted from 127.0.0.1 |
 
+To run it on an always-on Linux machine (e.g. a home server), run `sudo bash deploy/install.sh` from a clone. It installs the app as a sandboxed systemd service that starts on boot and restarts if it crashes, reachable on your home network and Tailscale at port 8000. Run it again to update.
+
 ## Tests
 
 ```bash
