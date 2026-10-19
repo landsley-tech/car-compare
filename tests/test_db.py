@@ -124,6 +124,30 @@ class BuilderTests(unittest.TestCase):
         self.assertNotIn("extractall", src)
 
 
+class FillGapsTests(unittest.TestCase):
+    """Missing race data is filled from the version name, sister versions, size or the model family, and flagged."""
+
+    def eng(self, id, model, name="x", hp=None, kg=None, dims=None, year=2020, mname="Golf"):
+        d = dict(zip(build_db.DIMS, dims or (None,) * 4))
+        return {"id": id, "model_id": model, "name": name, "hp": hp, "kg": kg, **d, "model": (model, "VW", mname, year)}
+
+    def test_fills_and_flags(self):
+        full = (4300, 1800, 1450, 2600)
+        es = [self.eng(1, 1, hp=150, kg=1300, dims=full),
+              self.eng(2, 1, name="2.0 TDI (184 HP)"),                                   # hp from name, kg + dims from sister
+              self.eng(3, 2, hp=110, dims=full, mname="Polo"),                           # kg from size only
+              self.eng(4, 3, hp=200, year=2024, mname="Golf GTI"),                       # nothing: family fallback (Golf)
+              self.eng(5, 4, hp=90, mname="Phaeton")]                                     # nothing anywhere: left empty
+        build_db.fill_gaps(es)
+        e = {x["id"]: x for x in es}
+        self.assertIsNone(e[1]["est"])
+        self.assertEqual((e[2]["hp"], e[2]["kg"], e[2]["length"], e[2]["est"]), (184, 1300, 4300, "hp,dims,kg"))
+        self.assertEqual(e[3]["kg"], round(118 * 4.3 * 1.8 * 1.45 / 5) * 5)
+        self.assertEqual(e[3]["est"], "kg")
+        self.assertEqual((e[4]["kg"], e[4]["length"], e[4]["est"]), (1300, 4300, "dims,kg"))
+        self.assertEqual((e[5]["kg"], e[5]["est"]), (None, None))
+
+
 class DbApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -190,6 +214,15 @@ class DbApiTests(unittest.TestCase):
         for brand in ["BMW%20or%201", "BMW'%20--", "BMW'%20OR%20'1'%3D'1"]:
             status, body = self.get("/api/db/models?brand=" + brand)
             self.assertTrue(status == 400 or (status, body) == (200, []), brand)  # rejected, or matched literally (nothing)
+
+    def test_us_register_car_borrows_closest_database_figures(self):
+        epa_m4 = {"make": "BMW", "model": "M4 Coupe", "year": 2018, "fuel": "Petrol", "cc": 2979, "drive": "RWD", "hp": None, "kg": None}
+        car = server.match_db(epa_m4)
+        self.assertEqual((car["hp"], car["kg"], car["est"]), (431, 1497, "matched"))
+        self.assertEqual(car["dims"]["wheelbase"], 2812)
+        self.assertIn("M4 Coupe (F82)", car["matched"])
+        for unsure in ({**epa_m4, "model": "X5"}, {**epa_m4, "year": 2005}, {**epa_m4, "cc": 4400}, {**epa_m4, "fuel": "Electric"}):
+            self.assertNotIn("matched", server.match_db(unsure), unsure)  # no confident match: left alone, never guessed
 
     def test_unknown_car_404(self):
         self.assertEqual(self.get("/api/db/car?id=99999")[0], 404)

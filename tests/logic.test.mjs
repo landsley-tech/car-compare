@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { esc, ukTax, raceTime, EVENTS, ENVS, outline, flatten, configPrice } from '../web/logic.js';
+import { esc, ukTax, raceTime, EVENTS, ENVS, outline, iconOutline, eraColours, flatten, configPrice } from '../web/logic.js';
 
 const models = JSON.parse(readFileSync(new URL('../web/data/cars.json', import.meta.url)));
 const cars = flatten(models);
@@ -129,4 +129,14 @@ test('historic exemption rolls forward on 1 April, not 1 January', () => {
   assert.notEqual(ukTax({ year: 1986, cc: 2000 }, new Date('2027-02-15')).annual, 0);  // tax year 2026/27: 1986 not exempt
   assert.equal(ukTax({ year: 1986, cc: 2000 }, new Date('2027-04-15')).annual, 0);     // tax year 2027/28: exempt
   assert.equal(ukTax({ year: 1985, cc: 2000 }, new Date('2027-02-15')).annual, 0);
+});
+
+test('every car gets colours and an icon, even without data', () => {
+  for (const y of [1899, 1955, 1975, 1995, 2024, undefined]) {
+    const cs = eraColours(y);
+    assert.ok(cs.length >= 5);
+    for (const c of cs) assert.match(c.hex, /^#[0-9a-f]{6}$/i);
+  }
+  assert.equal(eraColours(1975)[0].name, 'Harvest Gold');
+  for (const body of ['sedan', 'coupe', 'hatch', 'suv', 'roadster', 'unknown']) assert.ok(iconOutline({ body }).w > 0);
 });

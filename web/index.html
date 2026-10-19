@@ -7,7 +7,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Car Compare</title>
-<meta name="description" content="Compare any car from 1899 to today: specs, dimensions, running costs, colours, options and race estimates.">
+<meta name="description" content="Compare any car from 1899 to today: specs, dimensions, running costs, colours and race estimates.">
 <meta name="color-scheme" content="light dark">
 <meta name="theme-color" content="#0f172a">
 <link rel="manifest" href="/manifest.webmanifest">
@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Fira+Sans:wght@400;500;600;700&family=Syncopate:wght@700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Sans:wght@400;500;600;700&display=swap">
 <link rel="stylesheet" href="/style.css">
 <script type="module" src="/app.js"></script>
 </head>
@@ -23,13 +23,13 @@
 <a class="skip" href="#finder">Skip to car finder</a>
 
 <header class="appbar">
-  <div class="appbar-inner">
-    <a class="logo" href="/" aria-label="Car Compare home">
+  <div class="container appbar-inner">
+    <a class="logo" href="/">
       <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></svg>
-      <span>Car<b>Compare</b></span>
+      Car Compare
     </a>
     <nav class="nav" aria-label="Sections">
-      <a href="#overview">Overview</a><a href="#dimensions">Dimensions</a><a href="#race">Race</a><a href="#configure">Configure</a><a href="#specs">Specs</a>
+      <a href="#overview">Overview</a><a href="#dimensions">Dimensions</a><a href="#race">Race</a><a href="#configure">Colours</a><a href="#specs">Specs</a>
     </nav>
     <button class="icon-btn" id="theme" type="button" aria-label="Switch to dark theme">
       <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
@@ -38,116 +38,93 @@
   </div>
 </header>
 
-<main>
-  <section class="hero">
-    <div class="container">
-      <p class="eyebrow on-dark">Specs · dimensions · running costs · racing</p>
-      <h1>Compare any car, from 1899 to today.</h1>
-      <p class="lede" id="counts">Full specifications, to-scale outlines, UK car tax and head-to-head race estimates.</p>
+<main class="container stack">
+  <div class="intro">
+    <h1>Compare any car, 1899 to today</h1>
+    <p class="muted" id="counts">Specs, sizes, running costs and race estimates.</p>
+  </div>
+
+  <section class="card finder" id="finder" aria-label="Find a car">
+    <div class="tabs" role="tablist" aria-label="Data source">
+      <button role="tab" type="button" data-src="db" aria-selected="true">All cars</button>
+      <button role="tab" type="button" data-src="featured" aria-selected="false">Featured</button>
+      <button role="tab" type="button" data-src="epa" aria-selected="false">US register</button>
+    </div>
+    <p class="muted small" id="src-hint"></p>
+    <div class="fields" id="fields"></div>
+    <div class="row">
+      <button class="btn primary" id="add" type="button" disabled>
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg>Add to comparison
+      </button>
+      <span class="status" id="status" role="status" aria-live="polite"></span>
     </div>
   </section>
 
-  <div class="container stack">
-    <section class="card finder" id="finder" aria-labelledby="find-title">
-      <div class="finder-head">
-        <h2 id="find-title">Find a car</h2>
-        <div class="segmented" role="tablist" aria-label="Data source">
-          <button role="tab" type="button" data-src="db" aria-selected="true">Full database</button>
-          <button role="tab" type="button" data-src="featured" aria-selected="false">Featured</button>
-          <button role="tab" type="button" data-src="epa" aria-selected="false">US register</button>
-        </div>
-      </div>
-      <p class="help" id="src-hint"></p>
-      <div class="fields" id="fields"></div>
-      <div class="finder-foot">
-        <button class="btn primary" id="add" type="button" disabled>
-          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg>
-          <span>Add to comparison</span>
+  <section aria-labelledby="tray-title">
+    <div class="row spread">
+      <h2 id="tray-title">Line-up <span class="muted" id="tray-count">0 / 6</span></h2>
+      <div class="row">
+        <button class="btn" id="share" type="button" disabled>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Copy link
         </button>
-        <span class="status" id="status" role="status" aria-live="polite"></span>
+        <button class="btn" id="clear" type="button" disabled>Clear</button>
       </div>
-    </section>
-
-    <section class="tray-wrap" aria-labelledby="tray-title">
-      <div class="section-head row">
-        <div>
-          <h2 id="tray-title">Your line-up <span class="count" id="tray-count">0 / 6</span></h2>
-          <p class="help">Choose one car for a full spec sheet, or up to six to compare them.</p>
-        </div>
-        <div class="actions">
-          <button class="btn ghost" id="share" type="button" disabled>
-            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-            <span>Copy link</span>
-          </button>
-          <button class="btn ghost" id="clear" type="button" disabled>Clear all</button>
-        </div>
-      </div>
-      <div class="tray" id="tray"></div>
-    </section>
-
-    <div id="results" class="stack" hidden>
-      <section id="overview" class="section" aria-labelledby="overview-title">
-        <div class="section-head"><p class="eyebrow">01</p><h2 id="overview-title">Overview</h2></div>
-        <div class="metrics" id="metrics"></div>
-      </section>
-
-      <section id="dimensions" class="section" aria-labelledby="dims-title">
-        <div class="section-head"><p class="eyebrow">02</p><h2 id="dims-title">Dimensions to scale</h2>
-          <p class="help">Line outlines at the same scale, overlaid. Side, front, rear and plan view.</p></div>
-        <div class="views" id="views"></div>
-        <div class="table-box"><table class="data" id="dims-table"></table></div>
-      </section>
-
-      <section id="race" class="section" aria-labelledby="race-title">
-        <div class="section-head"><p class="eyebrow">03</p><h2 id="race-title">Race</h2>
-          <p class="help">Pick an event and the conditions, then press Start.</p></div>
-        <div class="card board" id="board">
-          <div class="board-head">
-            <div>
-              <h3 id="race-name"></h3>
-              <p class="help" id="race-note"></p>
-            </div>
-            <div class="controls">
-              <label class="field"><span>Event</span><select id="event"></select></label>
-              <label class="field"><span>Conditions</span><select id="env"></select></label>
-              <div class="clock" id="clock" aria-hidden="true">0.00</div>
-              <button class="btn primary" id="go" type="button">
-                <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3l14 9-14 9z"/></svg><span>Start</span>
-              </button>
-            </div>
-          </div>
-          <div class="strip" id="strip"></div>
-          <div class="race-results" id="race-results" aria-live="polite"></div>
-          <p class="callout">These are estimates. They use tested 0–60 times where available, then work out the rest from power-to-weight, the drivetrain and how each engine copes with the conditions. Read them for the order and gaps, not as measured results.</p>
-        </div>
-      </section>
-
-      <section id="configure" class="section" aria-labelledby="cfg-title">
-        <div class="section-head"><p class="eyebrow">04</p><h2 id="cfg-title">Configure &amp; colours</h2></div>
-        <div class="card cfg" id="cfg"></div>
-      </section>
-
-      <section id="specs" class="section" aria-labelledby="specs-title">
-        <div class="section-head"><p class="eyebrow">05</p><h2 id="specs-title">Full specification</h2>
-          <p class="help">The best figure in each row is highlighted.</p></div>
-        <div class="table-box"><table class="data specs" id="spec-table"></table></div>
-      </section>
     </div>
+    <div class="tray" id="tray"></div>
+  </section>
 
-    <section class="empty card" id="empty">
-      <svg class="icon big" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 17h2c.6 0 1-.4 1-1v-3c0-.9-.7-1.7-1.5-1.9C18.7 10.6 16 10 16 10s-1.3-1.4-2.2-2.3c-.5-.4-1.1-.7-1.8-.7H5c-.6 0-1.1.4-1.4.9l-1.4 2.9A3.7 3.7 0 0 0 2 12v4c0 .6.4 1 1 1h2"/><circle cx="7" cy="17" r="2"/><path d="M9 17h6"/><circle cx="17" cy="17" r="2"/></svg>
-      <h2>No cars yet</h2>
-      <p class="help">Pick a brand, model and version above, then press <b>Add to comparison</b>.</p>
+  <div id="results" class="stack" hidden>
+    <section id="overview" aria-labelledby="overview-title">
+      <h2 id="overview-title">Overview</h2>
+      <div class="metrics" id="metrics"></div>
+    </section>
+
+    <section id="dimensions" aria-labelledby="dims-title">
+      <h2 id="dims-title">Dimensions</h2>
+      <p class="muted small">To scale, overlaid.</p>
+      <div class="views" id="views"></div>
+      <div class="table-box"><table id="dims-table"></table></div>
+    </section>
+
+    <section id="race" aria-labelledby="race-title">
+      <h2 id="race-title">Race</h2>
+      <div class="card board" id="board">
+        <div class="row spread end">
+          <div>
+            <h3 id="race-name"></h3>
+            <p class="muted small" id="race-note"></p>
+          </div>
+          <div class="row end">
+            <label class="field"><span>Event</span><select id="event"></select></label>
+            <label class="field"><span>Conditions</span><select id="env"></select></label>
+            <span class="clock" id="clock" aria-hidden="true">0.00</span>
+            <button class="btn primary" id="go" type="button"><span>Start</span></button>
+          </div>
+        </div>
+        <div class="strip" id="strip"></div>
+        <div class="race-results" id="race-results" aria-live="polite"></div>
+        <p class="muted small">Estimated from power, weight, drivetrain and conditions; not measured times.</p>
+      </div>
+    </section>
+
+    <section id="configure" aria-labelledby="cfg-title">
+      <h2 id="cfg-title">Colours &amp; options</h2>
+      <div class="card cfg" id="cfg"></div>
+    </section>
+
+    <section id="specs" aria-labelledby="specs-title">
+      <h2 id="specs-title">Specification</h2>
+      <p class="muted small">Best figure in each row in green. ≈ marks an estimate.</p>
+      <div class="table-box"><table id="spec-table"></table></div>
     </section>
   </div>
+
+  <p class="empty muted" id="empty">No cars yet. Pick a brand, model and version, then <b>Add to comparison</b>.</p>
 </main>
 
-<footer class="footer">
-  <div class="container">
-    <p><b>Data sources.</b> Full database: the open autoevolution dataset (122 brands, 1899–2026). Featured: a curated catalogue with colours, options and launch prices. US register: the US EPA's fueleconomy.gov (1984–today).</p>
-    <p class="copyright">© 2026 Landsley Bowerman. Designed by Landsley Bowerman, built with Claude by Anthropic. MIT licence. Car makes and model names are trademarks of their owners.</p>
-    <p>Figures vary by market and spec. Economy is shown in UK mpg. 0–60 times for database cars are converted from 0–62 mph. UK car tax uses 2025/26 rates and treats the model year as the registration year; always check gov.uk before you buy.</p>
-  </div>
+<footer class="container footer muted small">
+  <p class="copyright">© 2026 Landsley Bowerman. Designed by Landsley Bowerman, built with Claude by Anthropic. MIT licence.</p>
+  <p>Data: autoevolution (All cars), US EPA fueleconomy.gov (US register), own catalogue (Featured). Figures vary by market. UK car tax uses 2025/26 rates; check gov.uk. Car names are trademarks of their owners.</p>
 </footer>
 </body>
 </html>

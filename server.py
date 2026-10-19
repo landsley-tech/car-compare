@@ -177,21 +177,27 @@ def body_of(cls):
     return "sedan"
 
 
+DRIVES = {"4-Wheel": "AWD", "All-Wheel": "AWD", "Rear": "RWD", "Front": "FWD"}
+
+
 def map_vehicle(v):
     """EPA record -> the app's car schema. US mpg -> UK mpg, g/mile -> g/km."""
-    drive = v.get("drive", "")
-    displ, cyl = num(v, "displ"), int(num(v, "cylinders"))
     fuel = fuel_of(v)
-    asp = "electric" if fuel == "Electric" else "turbo" if v.get("tCharger") or v.get("sCharger") == "S" else "na"
-    engine = "Electric motor " + v.get("evMotor", "") if fuel == "Electric" else \
-        f"{displ:.1f}L {cyl}-cyl{' turbo' if v.get('tCharger') else ' supercharged' if v.get('sCharger') == 'S' else ''}"
+    displ, cyl = num(v, "displ"), int(num(v, "cylinders"))
+    turbo, supercharged = bool(v.get("tCharger")), v.get("sCharger") == "S"
+    if fuel == "Electric":
+        engine, asp = f"Electric motor {v.get('evMotor', '')}".strip(), "electric"
+    else:
+        engine = f"{displ:.1f}L {cyl}-cyl" + (" turbo" if turbo else " supercharged" if supercharged else "")
+        asp = "turbo" if turbo or supercharged else "na"
+    drive_text = v.get("drive", "")
+    drive = next((code for word, code in DRIVES.items() if word in drive_text), drive_text or None)
     co2 = num(v, "co2TailpipeGpm")
     return {
-        "id": "epa-" + str(v.get("id", "")), "source": "epa", "make": v.get("make", ""), "model": v.get("model", ""),
-        "trim": f"{v.get('trany', '')}, {engine}".strip(", "), "year": int(num(v, "year")), "fuel": fuel,
-        "engine": engine.strip(), "cc": round(displ * 1000) or None, "asp": asp,
-        "drive": "AWD" if ("4-Wheel" in drive or "All-Wheel" in drive) else "RWD" if "Rear" in drive else "FWD" if "Front" in drive else drive,
-        "box": v.get("trany", ""), "mpg": round(num(v, "comb08") * 1.201) or None,
+        "id": f"epa-{v.get('id', '')}", "source": "epa", "make": v.get("make", ""), "model": v.get("model", ""),
+        "trim": f"{v.get('trany', '')}, {engine}".strip(", "), "year": int(num(v, "year")),
+        "fuel": fuel, "engine": engine, "cc": round(displ * 1000) or None, "asp": asp, "drive": drive, "box": v.get("trany", ""),
+        "mpg": round(num(v, "comb08") * 1.201) or None,
         "co2": round(co2 / 1.609) if co2 > 0 else (0 if fuel == "Electric" else None),
         "range": round(num(v, "range")) or None, "cls": v.get("VClass", ""), "body": body_of(v.get("VClass", "")),
     }
@@ -313,6 +319,52 @@ def db_api(path, q):
     return None
 
 
+MATCH_FIELDS = ("hp", "nm", "kg", "z60", "top", "tank", "clearance", "cargo", "image")
+
+
+def match_db(car):
+    """Lend a US register car the performance and size figures of its closest Full-database version.
+
+    Match on make, the model's first word, years on sale, fuel and engine size; the more model words and the closer
+    the engine size, the better. No confident match: the car is returned unchanged rather than given wrong numbers.
+    """
+    words = re.findall(r"[a-z0-9]+", car["model"].lower())
+    if not words or not car.get("year"):
+        return car
+    try:
+        rows = db().execute(
+            "SELECT e.*, m.name AS model_name, m.image FROM engines e JOIN models m ON m.id = e.model_id"
+            " WHERE m.brand = ? COLLATE NOCASE AND ? BETWEEN m.year_from - 1 AND"
+            # a single year in this dataset means "launched in", so allow the usual few years on sale
+            " CASE WHEN m.year_to IS NULL OR m.year_to = m.year_from THEN m.year_from + 6 ELSE m.year_to + 1 END"
+            " AND e.hp IS NOT NULL AND e.kg IS NOT NULL", [car["make"], car["year"]]).fetchall()
+    except DatabaseMissing:
+        return car
+    # short codes like the "3" in "Model 3" or "X5" decide the model, so they must match exactly
+    codes = [w for w in words[:2] if w.isdigit() or len(w) <= 2]
+
+    def score(r):
+        name = set(re.findall(r"[a-z0-9]+", re.sub(r"\(.*?\)", "", r["model_name"].lower())))  # ignore "(F82)"
+        if words[0] not in name or any(c not in name for c in codes):
+            return None
+        if (r["fuel"] == "Electric") != (car["fuel"] == "Electric"):
+            return None
+        if car.get("cc") and r["cc"] and abs(r["cc"] - car["cc"]) > 0.12 * car["cc"]:
+            return None
+        extra = len(name - set(words))  # "Corolla Cross" is a different car from "Corolla"
+        return (sum(w in name for w in words) - 0.6 * extra + (r["drive"] == car.get("drive")) + (r["fuel"] == car["fuel"])
+                - abs((r["cc"] or 0) - (car.get("cc") or 0)) / 1000)
+    best = max(((s, r) for r in rows if (s := score(r)) is not None), key=lambda x: x[0], default=None)
+    if not best:
+        return car
+    r = best[1]
+    filled = {k: r[k] for k in MATCH_FIELDS if car.get(k) is None and r[k] is not None}
+    dims = {k: r[k] for k in ("length", "width", "height", "wheelbase")}
+    if all(dims.values()):
+        filled["dims"] = dims
+    return {**car, **filled, "est": "matched", "matched": f"{r['model_name']} {r['name']}"}
+
+
 def api(path, q):
     if path.startswith("/api/db/"):
         return db_api(path, q)
@@ -325,7 +377,7 @@ def api(path, q):
     if path == "/api/epa/options":
         return options_with_fuel(year_param(q), text_param(q, "make"), text_param(q, "model"))
     if path == "/api/epa/vehicle":
-        return map_vehicle(epa_get(str(id_param(q))))
+        return match_db(map_vehicle(epa_get(str(id_param(q)))))
     return None
 
 

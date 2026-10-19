@@ -141,3 +141,24 @@ export function configPrice(car, colourName, addonNames) {
   const addons = (car.addons || []).filter(a => addonNames.includes(a.name));
   return (car.price || 0) + (colour?.price || 0) + addons.reduce((s, a) => s + a.price, 0);
 }
+
+/* ---------- typical colours by era (for cars without an official paint list) ---------- */
+const ERA_COLOURS = [
+  [1949, [['Black', '#141414'], ['Maroon', '#5a1a1f'], ['Brewster Green', '#1f3b2c'], ['Navy', '#1d2a44'], ['Cream', '#e9e0c8']]],
+  [1959, [['Black', '#141414'], ['Ivory', '#ece4cf'], ['Turquoise', '#5fb7b0'], ['Pale Yellow', '#eedc8c'], ['Coral Red', '#c9493f'], ['Sky Blue', '#8fb3cf']]],
+  [1969, [['White', '#efefea'], ['Signal Red', '#b3201f'], ['British Racing Green', '#1d3b2a'], ['Silver Blue', '#8ea3b8'], ['Beige', '#d6c7a6'], ['Black', '#141414']]],
+  [1979, [['Harvest Gold', '#d4a72c'], ['Avocado Green', '#6b7a33'], ['Burnt Orange', '#c2571f'], ['Chocolate Brown', '#4a2f22'], ['White', '#efefea'], ['Bright Yellow', '#f0c419']]],
+  [1989, [['White', '#f0f0ec'], ['Red', '#b4161c'], ['Silver', '#b8bcbf'], ['Black', '#141414'], ['Metallic Blue', '#2b4c7e'], ['Champagne', '#d8c8a4']]],
+  [1999, [['Dark Green Metallic', '#1f3d2e'], ['Teal', '#1f6b6b'], ['Burgundy', '#5e1a24'], ['White', '#f0f0ec'], ['Silver', '#b8bcbf'], ['Black', '#141414']]],
+  [2009, [['Silver', '#b8bcbf'], ['Black', '#141414'], ['Graphite Grey', '#4d5257'], ['Deep Blue', '#1d2e57'], ['Red', '#a8161f'], ['White', '#f2f2ef']]],
+  [Infinity, [['Pearl White', '#f2f2f0'], ['Black', '#121212'], ['Matte Grey', '#6d7071'], ['Silver', '#b8bcbf'], ['Deep Blue', '#1f3566'], ['Racing Red', '#b0141c']]],
+];
+export const eraColours = year => ERA_COLOURS.find(([upTo]) => (year || 2020) <= upTo)[1].map(([name, hex]) => ({ name, hex, price: 0 }));
+
+// typical sizes, so a car without dimensions still gets a correctly shaped icon
+const BODY_DIMS = {
+  sedan: { length: 4700, width: 1820, height: 1450, wheelbase: 2800 }, coupe: { length: 4500, width: 1820, height: 1350, wheelbase: 2650 },
+  hatch: { length: 4250, width: 1780, height: 1460, wheelbase: 2620 }, suv: { length: 4700, width: 1900, height: 1700, wheelbase: 2850 },
+  roadster: { length: 4100, width: 1750, height: 1260, wheelbase: 2400 },
+};
+export const iconOutline = car => outline({ ...car, dims: car.dims || BODY_DIMS[car.body] || BODY_DIMS.sedan }, 'side');

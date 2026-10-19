@@ -126,7 +126,7 @@ try {
   await choose('make', 'Volkswagen'); await choose('model', 'vw-beetle-54');
   await add(5);
   await js(`document.getElementById('add').click()`);
-  await waitFor(`/already/.test(document.getElementById('status').textContent)`);
+  await waitFor(`/already/i.test(document.getElementById('status').textContent)`);
   step('featured tab: Audi S3 + VW Beetle added; duplicate rejected');
 
   // outlines: four views, one outline per car with dimensions
@@ -153,8 +153,9 @@ try {
   assert.equal(await js(`document.querySelector('.total strong').textContent`), '£49,945');
   assert.match(await js(`document.getElementById('spec-table').textContent`), /Kemora Grey/);
   await js(`(() => { const s = document.getElementById('cfg-car'); s.value = s.options[0].value; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  assert.match(await js(`document.getElementById('cfg').textContent`), /don't have colour or option data/);
-  step('configurator: paint + option update the price; database cars explain missing options');
+  assert.match(await js(`document.getElementById('cfg').textContent`), /Typical colours of the 2010s/);
+  assert.ok(await js(`document.querySelectorAll('.swatch input').length >= 5`), 'database car has colour choices');
+  step('configurator: paint + option update the price; database cars get era colours');
 
   // spec table
   const tax = await js(`[...document.querySelectorAll('#spec-table tr')].find(r => r.textContent.startsWith('UK car tax')).textContent`);
@@ -199,8 +200,9 @@ try {
     await waitFor(`document.getElementById('f-version').options.length > 1`, 60000);
     await firstVersion();
     await add(5);
-    assert.match(await js(`document.getElementById('spec-table').textContent`), /US EPA register/);
-    step('live EPA lookup: 2018 BMW M4 Coupe added');
+    assert.match(await js(`document.getElementById('spec-table').textContent`), /Closest match: M4 Coupe/);
+    assert.doesNotMatch(await js(`document.getElementById('strip').textContent`), /No power or weight data/);
+    step('live EPA lookup: 2018 BMW M4 Coupe added, matched to the database, and it can race');
   }
 
   const problems = events.filter(e => e.method === 'Runtime.exceptionThrown' ||

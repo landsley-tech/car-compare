@@ -124,6 +124,48 @@ def sane(e):
     return e
 
 
+DIMS = ("length", "width", "height", "wheelbase")
+KG_PER_M3 = 118  # median kerb weight per cubic metre of length x width x height across the dataset (IQR 109-129)
+
+
+def fill_gaps(engines):
+    """Fill missing race data so more cars can be compared; every filled field is listed in "est"."""
+    by_model, by_family = {}, {}
+    family = lambda e: (e["model"][1], e["model"][2].split()[0].lower())  # brand + first word: "Octavia", "A-Class"
+    for e in engines:
+        by_model.setdefault(e["model_id"], []).append(e)
+        if all(e[k] for k in DIMS) and e["kg"]:
+            by_family.setdefault(family(e), []).append(e)
+    for e in engines:
+        est = []
+        sibs = by_model[e["model_id"]]
+        if e["hp"] is None and (hp := first(r"\((\d+)\s*HP\)", e["name"], int)) and 5 <= hp <= 2100:
+            e["hp"] = hp
+            est.append("hp")
+        if not all(e[k] for k in DIMS) and (donor := next((s for s in sibs if all(s[k] for k in DIMS)), None)):
+            e.update({k: donor[k] for k in DIMS})
+            est.append("dims")
+        if not all(e[k] for k in DIMS) or e["kg"] is None:
+            # last resort: the nearest-year model of the same family (usually the previous generation)
+            year = e["model"][3] or 0
+            near = min(by_family.get(family(e), []), key=lambda s: abs((s["model"][3] or 0) - year), default=None)
+            if near and not all(e[k] for k in DIMS):
+                e.update({k: near[k] for k in DIMS})
+                est.append("dims")
+            if near and e["kg"] is None and not any(s["kg"] for s in sibs):
+                e["kg"] = near["kg"]
+                est.append("kg")
+        if e["kg"] is None:
+            weights = sorted(s["kg"] for s in sibs if s["kg"])
+            if weights:
+                e["kg"] = weights[len(weights) // 2]  # median of the same model's other versions
+            elif all(e[k] for k in ("length", "width", "height")):
+                e["kg"] = round(KG_PER_M3 * e["length"] * e["width"] * e["height"] / 1e9 / 5) * 5
+            if e["kg"]:
+                est.append("kg")
+        e["est"] = ",".join(est) or None
+
+
 def years_of(title, slug=""):
     m = re.search(r"(\d{4})\s*-\s*(\d{4}|Present)", title, re.I)
     if m:
@@ -145,7 +187,8 @@ def build(src, out):
       CREATE TABLE models (id INTEGER PRIMARY KEY, brand TEXT NOT NULL, name TEXT NOT NULL, year_from INT, year_to INT, image TEXT);
       CREATE TABLE engines (id INTEGER PRIMARY KEY, model_id INT NOT NULL REFERENCES models(id), name TEXT NOT NULL, fuel TEXT,
         engine TEXT, cc INT, asp TEXT, hp INT, nm INT, kg INT, z60 REAL, top INT, mpg INT, co2 INT, tank INT, drive TEXT, box TEXT,
-        length INT, width INT, height INT, wheelbase INT, clearance INT, cargo INT, range INT, batt REAL, body TEXT);
+        length INT, width INT, height INT, wheelbase INT, clearance INT, cargo INT, range INT, batt REAL, body TEXT,
+        est TEXT);  -- comma-separated fields that were estimated, not published
     """)
     # automobiles.csv columns are shifted by one in the source: url is in "name", title in "image", photos in "engine_name"
     models = {}
@@ -166,7 +209,7 @@ def build(src, out):
         models[a["id"]] = (int(a["id"]), brand_name(brand), name or title, y0, y1, photos[0] if photos else None)
     db.executemany("INSERT INTO models VALUES (?,?,?,?,?,?)", models.values())
 
-    rows = []
+    engines = []
     for e in read("engines.csv"):
         m = models.get(e["automobile_id"])
         if not m or not e["id"].isdigit():
@@ -175,10 +218,13 @@ def build(src, out):
             spec = sane(parse_engine(json.loads(e["specs"]), e["name"]))
         except (ValueError, AttributeError, TypeError):
             continue
-        spec["body"] = body_of(m[2], spec["height"])
-        rows.append((int(e["id"]), m[0], clean(e["name"]), *spec.values()))
-    cols = 3 + len(spec)
-    db.executemany(f"INSERT INTO engines VALUES ({','.join('?' * cols)})", rows)
+        engines.append({"id": int(e["id"]), "model_id": m[0], "name": clean(e["name"]), **spec, "model_name": m[2], "model": m})
+    fill_gaps(engines)
+    for e in engines:
+        e.pop("model")
+        e["body"] = body_of(e.pop("model_name"), e["height"])
+    cols = list(engines[0])
+    db.executemany(f"INSERT INTO engines ({','.join(cols)}) VALUES ({','.join('?' * len(cols))})", [tuple(e.values()) for e in engines])
     db.executescript("""
       DELETE FROM models WHERE id NOT IN (SELECT model_id FROM engines);
       CREATE INDEX models_brand ON models(brand, year_from);

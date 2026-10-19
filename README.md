@@ -6,15 +6,15 @@ Compare any car from 1899 to today: about 30,000 versions of 7,167 models from 1
 
 - **Find a car** with dropdowns: fuel type, era, brand, model, version/trim.
 - **Three data sources** (tabs in the finder)
-  - **Full database (1899–2026):** 29,971 versions with power, torque, weight, 0–60, top speed, economy, CO2, tank, dimensions, boot space and a photo. It's built into `data/cars.db` from the open autoevolution dataset (see below). It has no colour, option or price data.
+  - **Full database (1899–2026):** 29,971 versions with power, torque, weight, 0–60, top speed, economy, CO2, tank, dimensions, boot space and a photo. It's built into `data/cars.db` from the open autoevolution dataset (see below). Where the source is missing power, weight or size, the importer estimates them from the version name, sister versions, the car's size or the previous generation; the app marks those values with ≈.
   - **Featured:** a small curated catalogue (`web/data/cars.json`) that adds paint colours, options and launch prices.
-  - **US register (1984–today):** a live lookup from the US EPA (fueleconomy.gov). It covers economy and CO2 only, but includes the newest US models.
+  - **US register (1984–today):** a live lookup from the US EPA (fueleconomy.gov), including the newest US models. The EPA has no power, weight or size figures, so the server borrows them from the closest Full-database match (same make, model, years, fuel and engine size) and labels them "Closest match". No confident match means no borrowed numbers.
 - **Line-up** of up to 6 cars with photos. **Copy link** shares the exact line-up.
 - **Light/dark theme**, remembered per browser.
 - **At a glance:** bar charts for power, torque, weight, power-to-weight, 0–60, economy and price.
 - **Dimensions to scale:** overlaid line outlines of the side, front, rear and top, plus a table with the differences.
 - **Race:** 0–60, ¼ mile, 50–100 mph, circuit lap or mountain pass. Run each one in the dry, wet, snow, high altitude or desert heat, as an animated race. These are estimates (see below).
-- **Configure & colours:** pick a paint and options. The price, outlines, UK car tax and spec table all update.
+- **Colours & options:** Featured cars have factory colours, options and prices; every other car gets the typical colours of its era (labelled as such). The price, outlines, UK car tax and spec table all update.
 - **Running costs:** UK car tax (VED) on 2025/26 rules, plus fuel tank size and range.
 - **Installable app:** in Chrome or Edge, use the install icon in the address bar (on a phone: "Add to Home Screen"). The app shell and Featured cars work offline.
 
@@ -49,8 +49,8 @@ Settings come from environment variables:
 ## Tests
 
 ```bash
-python3 -m unittest discover tests     # server, database importer + security/attack tests (47)
-node --test                            # tax, race model, outlines, escaping, catalogue checks (12)
+python3 -m unittest discover tests     # server, database importer + security/attack tests (49)
+node --test                            # tax, race model, outlines, escaping, catalogue checks (13)
 node tests/e2e.mjs                     # drives the real page in headless Chrome (add EPA=1 for the live EPA test)
 ```
 
