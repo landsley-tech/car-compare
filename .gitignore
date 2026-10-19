@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+PRIVATE-make-it-public.md
+# built from a third-party scrape: rebuild with tools/build_db.py, do not publish
+data/*.db
+data/*.tmp
