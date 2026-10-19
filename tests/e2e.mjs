@@ -1,3 +1,6 @@
+// Car Compare. Copyright (c) 2026 Landsley Bowerman. MIT licence, see LICENSE.
+// Designed by Landsley Bowerman; code written by Claude (Anthropic) from Landsley's prompts.
+// SPDX-License-Identifier: MIT
 // End-to-end: drives the real page in headless Chrome over the DevTools protocol. No npm packages needed.
 // Run: node tests/e2e.mjs   (CHROME=/path/to/chrome to choose a browser, EPA=1 to also test the live EPA lookup, OUT=dir for screenshots)
 import { spawn } from 'node:child_process';

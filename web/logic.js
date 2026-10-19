@@ -1,3 +1,6 @@
+// Car Compare. Copyright (c) 2026 Landsley Bowerman. MIT licence, see LICENSE.
+// Designed by Landsley Bowerman; code written by Claude (Anthropic) from Landsley's prompts.
+// SPDX-License-Identifier: MIT
 // Pure functions shared by the app and the tests (node --test tests/).
 
 export const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);

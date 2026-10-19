@@ -1,3 +1,6 @@
+// Car Compare. Copyright (c) 2026 Landsley Bowerman. MIT licence, see LICENSE.
+// Designed by Landsley Bowerman; code written by Claude (Anthropic) from Landsley's prompts.
+// SPDX-License-Identifier: MIT
 // Service worker: makes Car Compare installable and lets the app shell + Featured catalogue work offline.
 // Network-first, so a server update is picked up on the next visit; the cache is only the offline fallback.
 const CACHE = 'car-compare-v1';

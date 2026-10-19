@@ -1,5 +1,7 @@
 # Car Compare
 
+© 2026 Landsley Bowerman · MIT licence · Designed by Landsley Bowerman, built with Claude
+
 Compare any car from 1899 to today: about 30,000 versions of 7,167 models from 122 brands, plus every US-market car since 1984. Pick one car for its full spec sheet, or line up 2–6 cars side by side.
 
 - **Find a car** with dropdowns: fuel type, era, brand, model, version/trim.
@@ -88,3 +90,14 @@ The code in this repo is yours to use. The **Full database** is not included: `t
 - **Race times** use tested 0–60 times where known. Everything else is estimated from power-to-weight, drivetrain, engine type and conditions. Use them for the order and the gaps, not as lap records.
 - **UK tax** uses the model year as the registration date and 2025/26 rates. The rate tables in `web/logic.js` need updating each April.
 - **EPA data** is US-market. Economy is converted to UK mpg and CO2 to g/km, but it comes from the US test cycle.
+
+## Credits
+
+- **Design and direction: Landsley Bowerman.** Landsley planned the app, chose every feature (the car finder and filters, comparing two or more cars, to-scale outlines, running costs and car tax, colours and options, racing in different conditions, security and self-hosting), set the visual direction, and reviewed and tested the results.
+- **Code: Claude** (Anthropic's AI model, Claude Opus 5.5, working in Claude Code). Claude wrote the code, tests and documentation from Landsley's prompts.
+
+## Licence
+
+© 2026 Landsley Bowerman. Released under the [MIT licence](LICENSE): anyone may use, change and share this code, as long as they keep the copyright notice.
+
+Third-party icons, fonts and data keep their own terms; see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). The Full database and car photos are **not** covered by this licence.

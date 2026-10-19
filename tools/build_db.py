@@ -1,3 +1,6 @@
+# Car Compare. Copyright (c) 2026 Landsley Bowerman. MIT licence, see LICENSE.
+# Designed by Landsley Bowerman; code written by Claude (Anthropic) from Landsley's prompts.
+# SPDX-License-Identifier: MIT
 """Build data/cars.db from the open autoevolution scrape (github.com/ilyasozkurt/automobile-models-and-specs).
 
   python3 tools/build_db.py                 # downloads the dataset (~25 MB) to a temp folder, then builds

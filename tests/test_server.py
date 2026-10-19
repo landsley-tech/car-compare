@@ -1,3 +1,6 @@
+# Car Compare. Copyright (c) 2026 Landsley Bowerman. MIT licence, see LICENSE.
+# Designed by Landsley Bowerman; code written by Claude (Anthropic) from Landsley's prompts.
+# SPDX-License-Identifier: MIT
 """Server tests, including attack cases. Run: python3 -m unittest discover tests"""
 import http.client
 import json

@@ -1,3 +1,6 @@
+/* Car Compare. Copyright (c) 2026 Landsley Bowerman. MIT licence, see LICENSE. */
+/* Designed by Landsley Bowerman; code written by Claude (Anthropic) from Landsley's prompts. */
+/* SPDX-License-Identifier: MIT */
 /* Design system (ui-ux-pro-max): premium slate + action red; Fira Sans for UI, Fira Code for figures, Syncopate for the wordmark. */
 :root {
   --bg: #f8fafc; --surface: #ffffff; --surface-2: #f1f5f9; --fg: #0f172a; --muted: #475569; --subtle: #64748b;
@@ -264,3 +267,4 @@ legend { font: 600 .75rem var(--mono); letter-spacing: .08em; text-transform: up
   .clock { font-size: 1.375rem; }
   .controls .field { min-width: 0; flex: 1 1 140px; }
 }
+.footer .copyright { color: var(--fg); font-weight: 500; }

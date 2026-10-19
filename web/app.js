@@ -1,3 +1,6 @@
+// Car Compare. Copyright (c) 2026 Landsley Bowerman. MIT licence, see LICENSE.
+// Designed by Landsley Bowerman; code written by Claude (Anthropic) from Landsley's prompts.
+// SPDX-License-Identifier: MIT
 import { esc, ukTax, raceTime, EVENTS, ENVS, outline, flatten, unique, configPrice } from './logic.js';
 
 const $ = id => document.getElementById(id);
@@ -414,6 +417,8 @@ $('tray').addEventListener('click', e => {
   if (e.target.closest('#add-slot')) { $('finder').scrollIntoView(); document.querySelector('#fields select:not(:disabled)')?.focus({ preventScroll: true }); }
 });
 $('clear').addEventListener('click', () => { picks = []; renderAll(); });
+// a share link pasted into an already-open tab only changes the hash; saveHash's replaceState never fires this
+addEventListener('hashchange', () => { picks = []; restoreHash(); });
 $('share').addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(location.href); setStatus('', 'Link copied. Anyone with it sees this line-up.'); }
   catch { setStatus('', 'Copy this page address to share the line-up.'); }
