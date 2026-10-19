@@ -125,7 +125,6 @@ class DbApiTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         BuilderTests.setUpClass()
-        cls.fixture = BuilderTests
         cls.patch = mock.patch.object(server, "DB_PATH", BuilderTests.db_path)
         cls.patch.start()
         server.DB_FUELS.clear()

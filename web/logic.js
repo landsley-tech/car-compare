@@ -13,7 +13,8 @@ const BANDS_2001 = [['A', 100, 20], ['B', 110, 20], ['C', 120, 35], ['D', 130, 1
 export function ukTax(car, now = new Date()) {
   const { year, co2, cc, price } = car;
   if (!year) return { label: 'Unknown', annual: null, note: 'No year' };
-  if (year <= now.getFullYear() - 41) // historic vehicle: built 40+ years before the start of the tax year
+  const taxYear = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear(); // UK tax years start 1 April
+  if (year <= taxYear - 41) // historic: built before 1 January, 40 years before the tax year started
     return { label: 'Historic (exempt)', annual: 0, note: 'Free to tax: built over 40 years ago' };
   if (year < 2001) {
     if (!cc) return { label: 'Pre-2001', annual: null, note: 'Needs engine size' };

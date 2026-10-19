@@ -73,6 +73,19 @@ try {
   assert.match(await js(`document.getElementById('counts').textContent`), /29,971 versions/);
   step('page loads on the full database (122 brands, counts shown)');
 
+  // a malformed share link is ignored, not an error
+  await cdp('Page.navigate', { url: BASE + '#cars=%E0%A4' });
+  await waitFor(`document.getElementById('f-make')?.options.length > 100`);
+  assert.equal(await js(`document.querySelectorAll('.slot:not(.add)').length`), 0);
+
+  // Featured era filter counts every decade a model was on sale (Morris Minor 948cc: 1956, sold into the 60s)
+  await js(`document.querySelector('[data-src="featured"]').click()`);
+  await choose('decade', '1960s'); await choose('make', 'Morris'); await choose('model', 'morris-minor');
+  assert.equal(await js(`document.getElementById('f-version').options.length`), 3);
+  await js(`document.querySelector('[data-src="db"]').click()`);
+  await waitFor(`document.getElementById('f-make')?.options.length > 100`);
+  step('malformed share link ignored; Featured era filter matches the database rule');
+
   // full database: a single car
   await choose('decade', '2010');
   await choose('make', 'BMW');

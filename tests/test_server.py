@@ -189,11 +189,59 @@ class AttackTests(ServerCase):
             # ...and serves normally again
             self.assertEqual(self.get("/")[0].status, 200)
 
+    def test_spoofed_headers_behind_caddy_do_not_bypass_rate_limit(self):
+        server.limiter = server.RateLimiter(60, burst=5)
+        with mock.patch.object(server, "TRUST_PROXY", "caddy"):
+            codes = [self.get("/", headers={"X-Forwarded-For": f"10.0.0.{i}, 198.51.100.9", "CF-Connecting-IP": f"10.1.0.{i}"})[0].status
+                     for i in range(10)]
+        self.assertEqual(set(codes[5:]), {429})
+
+    def test_unexpected_upstream_reply_is_500_and_server_survives(self):
+        for reply in (["a list"], "text", 42, {"menuItem": "nonsense"}, {"menuItem": [{"no": "value"}]}):
+            with mock.patch.object(server, "epa_get", lambda p, _r=reply, **k: _r):
+                r, body = self.get("/api/epa/makes?year=2018")
+            self.assertIn(r.status, (200, 500), reply)
+            self.assertTrue(json.loads(body) == [] or json.loads(body) == {"error": "unexpected error"}, reply)
+        with mock.patch.object(server, "epa_get", lambda p, **k: ["a list"]):
+            r, body = self.get("/api/epa/vehicle?id=1")
+        self.assertEqual((r.status, json.loads(body)), (500, {"error": "unexpected error"}))
+        self.assertEqual(self.get("/")[0].status, 200)
+
     def test_api_responses_are_json_not_html(self):
         # anything reflected from EPA data comes back as JSON, which browsers will not execute as a page
         with mock.patch.object(server, "epa_get", lambda p, **k: {"menuItem": [{"value": "<script>alert(1)</script>"}]}):
             r, body = self.get("/api/epa/makes?year=2018")
         self.assertEqual(r.getheader("Content-Type"), "application/json; charset=utf-8")
+
+
+class ProxyTrustTests(unittest.TestCase):
+    """Forwarded-IP headers are believed only from the local proxy, and only the one that proxy sets."""
+
+    def ip(self, mode, peer, headers):
+        h = server.Handler.__new__(server.Handler)
+        h.client_address, h.headers = (peer, 1), headers
+        with mock.patch.object(server, "TRUST_PROXY", mode):
+            return h.client_ip()
+
+    def test_cloudflare_mode(self):
+        hdrs = {"CF-Connecting-IP": "198.51.100.7", "X-Forwarded-For": "6.6.6.6"}
+        self.assertEqual(self.ip("cloudflare", "127.0.0.1", hdrs), "198.51.100.7")
+        self.assertEqual(self.ip("cloudflare", "203.0.113.50", hdrs), "203.0.113.50")  # not from the proxy: ignored
+
+    def test_caddy_mode_uses_last_entry_and_ignores_cf_header(self):
+        hdrs = {"CF-Connecting-IP": "7.7.7.7", "X-Forwarded-For": "6.6.6.6, 198.51.100.9"}
+        self.assertEqual(self.ip("caddy", "127.0.0.1", hdrs), "198.51.100.9")
+        self.assertEqual(self.ip("caddy", "::1", {"X-Forwarded-For": "not-an-ip"}), "::1")
+
+    def test_no_proxy_ignores_all_headers(self):
+        self.assertEqual(self.ip("", "127.0.0.1", {"CF-Connecting-IP": "7.7.7.7", "X-Forwarded-For": "6.6.6.6"}), "127.0.0.1")
+
+    def test_unknown_trust_proxy_value_refuses_to_start(self):
+        import subprocess
+        r = subprocess.run([sys.executable, "-c", "import server"], cwd=Path(server.__file__).parent,
+                           env={**__import__("os").environ, "TRUST_PROXY": "1"}, capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("TRUST_PROXY must be", r.stderr)
 
 
 class ApiTests(ServerCase):
@@ -249,6 +297,25 @@ class UnitTests(unittest.TestCase):
         self.assertTrue(rl.allow("b"))  # buckets are per IP
         time.sleep(0.15)
         self.assertTrue(rl.allow("a"))
+
+    def test_ipv6_limited_per_home_network(self):
+        rl = server.RateLimiter(60, burst=3)
+        results = [rl.allow(f"2001:db8:1:2::{i:x}") for i in range(6)]  # one /64, rotating addresses
+        self.assertEqual(results, [True, True, True, False, False, False])
+        self.assertTrue(rl.allow("2001:db8:1:3::1"))  # a different home is unaffected
+
+    def test_flooding_buckets_does_not_reset_active_limits(self):
+        rl = server.RateLimiter(60, burst=2)
+        rl.allow("198.51.100.1"); rl.allow("198.51.100.1")
+        self.assertFalse(rl.allow("198.51.100.1"))
+        stale = time.monotonic() - 3600
+        rl.buckets.update({f"10.{i >> 16}.{(i >> 8) & 255}.{i & 255}": (2, stale) for i in range(50_001)})
+        self.assertFalse(rl.allow("198.51.100.1"))  # still limited: only idle buckets were pruned
+        self.assertLess(len(rl.buckets), 10)
+
+    def test_menu_tolerates_bad_shapes(self):
+        for bad in (None, [], "x", {"menuItem": "x"}, {"menuItem": [1, {"text": "no value"}]}):
+            self.assertEqual(server.menu(bad), [], bad)
 
     def test_cache_is_bounded(self):
         c = server.TTLCache(size=3)

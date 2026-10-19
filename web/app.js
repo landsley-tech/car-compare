@@ -56,7 +56,11 @@ const SOURCES = {
     hint: () => 'A curated catalogue (1954 to today, including British classics), with available colours, options and launch prices.',
     fields: [
       { k: 'fuel', label: 'Fuel type', any: 'Any fuel', opts: async () => unique(FEATURED.map(c => c.fuel)) },
-      { k: 'decade', label: 'Era', any: 'Any year', opts: async () => unique(FEATURED.map(c => decade(c.year))) },
+      { k: 'decade', label: 'Era', any: 'Any year', opts: async () => unique(FEATURED.flatMap(c => {
+        const out = [];
+        for (let d = Math.floor(c.years[0] / 10) * 10; d <= (c.years[1] ?? new Date().getFullYear()); d += 10) out.push(`${d}s`);
+        return out;
+      })) },
       { k: 'make', label: 'Brand', any: 'Choose brand', opts: async s => unique(featuredPool(s).map(c => c.make)) },
       { k: 'model', label: 'Model', any: 'Choose model', needs: 'make', opts: async s =>
         [...new Map(featuredPool(s).filter(c => c.make === s.make).map(c => [c.modelId, { value: c.modelId, text: `${c.model} (${c.gen}, ${c.years[0]}–${c.years[1] ?? 'now'})` }])).values()] },
@@ -78,7 +82,9 @@ const SOURCES = {
     load: s => api('epa/vehicle?' + qs({ id: s.version })),
   },
 };
-const featuredPool = s => FEATURED.filter(c => (!s.fuel || c.fuel === s.fuel) && (!s.decade || decade(c.year) === s.decade));
+// same rule as the database: a model counts for every decade it was on sale in
+const onSaleIn = (c, d) => c.years[0] <= d + 9 && (c.years[1] ?? 9999) >= d;
+const featuredPool = s => FEATURED.filter(c => (!s.fuel || c.fuel === s.fuel) && (!s.decade || onSaleIn(c, parseInt(s.decade))));
 const epaOptions = s => api('epa/options?' + qs({ year: s.year, make: s.make, model: s.model }));
 
 /* ---------- finder ---------- */
@@ -164,7 +170,8 @@ function saveHash() {
 async function restoreHash() {
   const m = location.hash.match(/^#cars=([^&]{1,400})$/);
   if (!m) return;
-  const ids = decodeURIComponent(m[1]).split(',').slice(0, MAX_PICKS);
+  let ids;
+  try { ids = decodeURIComponent(m[1]).split(',').slice(0, MAX_PICKS); } catch { return; } // malformed link: ignore it
   const cars = await Promise.all(ids.map(id => loadCar(id).catch(() => null)));
   cars.forEach(addCar);
   setStatus();

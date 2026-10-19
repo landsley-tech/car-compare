@@ -18,7 +18,11 @@ from pathlib import Path
 
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(os.environ.get("PORT", "8000"))
-TRUST_PROXY = os.environ.get("TRUST_PROXY") == "1"  # only set when behind Caddy / Cloudflare Tunnel
+# Behind a proxy on this machine: "cloudflare" (Cloudflare Tunnel) or "caddy". Unset = visitors connect directly.
+TRUST_PROXY = os.environ.get("TRUST_PROXY", "")
+if TRUST_PROXY not in ("", "cloudflare", "caddy"):
+    raise SystemExit("TRUST_PROXY must be 'cloudflare', 'caddy' or unset")
+PROXY_PEERS = {"127.0.0.1", "::1"}  # forwarded-IP headers are only believed when the proxy itself is the peer
 MAX_CONN = int(os.environ.get("MAX_CONN", "64"))
 MAX_CONN_PER_IP = int(os.environ.get("MAX_CONN_PER_IP", "16"))
 RATE_PER_MIN = int(os.environ.get("RATE_PER_MIN", "120"))
@@ -54,11 +58,24 @@ class RateLimiter:
         self.rate, self.cap = per_min / 60, burst or max(10, per_min // 2)
         self.buckets, self.lock = {}, threading.Lock()
 
+    @staticmethod
+    def key(ip):
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return ip
+        # one IPv6 home gets a whole /64 (billions of addresses), so limit the network, not each address
+        return str(ipaddress.ip_network(f"{addr}/64", strict=False)) if addr.version == 6 else str(addr)
+
     def allow(self, ip):
-        now = time.monotonic()
+        now, ip = time.monotonic(), self.key(ip)
         with self.lock:
-            if len(self.buckets) > 50_000:  # stop a spoofed-IP flood from eating memory
-                self.buckets.clear()
+            if len(self.buckets) > 50_000:
+                # idle buckets have refilled anyway, so dropping them resets nobody's limit
+                full_after = self.cap / self.rate
+                self.buckets = {k: v for k, v in self.buckets.items() if now - v[1] < full_after}
+                if len(self.buckets) > 50_000:  # a real distributed flood: cap memory
+                    self.buckets.clear()
             tokens, last = self.buckets.get(ip, (self.cap, now))
             tokens = min(self.cap, tokens + (now - last) * self.rate)
             ok = tokens >= 1
@@ -113,8 +130,9 @@ def epa_get(path, **params):
 
 
 def menu(data):
-    items = (data or {}).get("menuItem", [])
-    return [items] if isinstance(items, dict) else items  # EPA returns a bare object when there is one item
+    items = data.get("menuItem", []) if isinstance(data, dict) else []
+    items = [items] if isinstance(items, dict) else items  # EPA returns a bare object when there is one item
+    return [i for i in items if isinstance(i, dict) and "value" in i] if isinstance(items, list) else []
 
 
 def fuel_of(v):
@@ -213,6 +231,10 @@ class DatabaseMissing(Exception):
     pass
 
 
+class NotFound(Exception):
+    pass
+
+
 def db():
     if not getattr(_local, "db", None):
         if not DB_PATH.exists():
@@ -283,7 +305,7 @@ def db_api(path, q):
         r = db().execute("SELECT e.*, m.brand, m.name AS model_name, m.year_from, m.year_to, m.image FROM engines e JOIN models m ON m.id = e.model_id"
                          " WHERE e.id = ?", [id_param(q)]).fetchone()
         if not r:
-            raise LookupError()
+            raise NotFound()
         return db_car(r)
     return None
 
@@ -314,13 +336,17 @@ class Handler(BaseHTTPRequestHandler):
         return "car-compare"  # don't advertise the Python version
 
     def client_ip(self):
-        if TRUST_PROXY:
-            fwd = self.headers.get("CF-Connecting-IP") or self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+        peer = self.client_address[0]
+        if TRUST_PROXY and peer in PROXY_PEERS:
+            # Cloudflare overwrites CF-Connecting-IP; Caddy appends the real peer as the LAST X-Forwarded-For entry
+            # (earlier entries are whatever the visitor sent, so they are never trusted).
+            fwd = self.headers.get("CF-Connecting-IP", "") if TRUST_PROXY == "cloudflare" else \
+                self.headers.get("X-Forwarded-For", "").split(",")[-1].strip()
             try:
                 return str(ipaddress.ip_address(fwd))
             except ValueError:
                 pass
-        return self.client_address[0]
+        return peer
 
     def send(self, code, body=b"", ctype="text/plain; charset=utf-8", cache_secs=0):
         self.send_response(code)
@@ -353,10 +379,13 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json(400, {"error": f"invalid {e}"})
         except UpstreamError:
             return self.send_json(502, {"error": "EPA data service unavailable, try again shortly"})
-        except LookupError:
+        except NotFound:
             return self.send_json(404, {"error": "not found"})
         except DatabaseMissing:
             return self.send_json(503, {"error": "car database not built yet: run python3 tools/build_db.py"})
+        except Exception as e:  # e.g. the EPA changes its reply format: answer clearly, log it, keep serving
+            print(f"error on {url.path}: {type(e).__name__}: {e}", flush=True)
+            return self.send_json(500, {"error": "unexpected error"})
         if result is None:
             return self.send(404, b"Not found")
         self.send_json(200, result, cache_secs=3600)

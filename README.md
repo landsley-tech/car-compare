@@ -35,7 +35,7 @@ Settings come from environment variables:
 | `RATE_PER_MIN` | `120` | Requests per minute per visitor before they get "429 Too many requests" |
 | `MAX_CONN` | `64` | Total simultaneous connections |
 | `MAX_CONN_PER_IP` | `16` | Simultaneous connections per visitor |
-| `TRUST_PROXY` | off | Set to `1` **only** behind Cloudflare Tunnel or Caddy (see the private guide) |
+| `TRUST_PROXY` | off | `cloudflare` or `caddy` when running behind that proxy on the same machine (see the private guide) |
 
 ## Tests
 
@@ -52,7 +52,7 @@ The e2e test looks for Playwright's headless Chrome in `~/.cache/ms-playwright`.
 The server is built so that one person can't easily take it down or use it to attack anything:
 
 - **Static files** are loaded into memory at startup and served by exact path, so path traversal (`/../server.py`) is impossible.
-- **Rate limiting** gives each visitor a token bucket. A visitor can't dodge it by faking `X-Forwarded-For` unless `TRUST_PROXY=1` is set.
+- **Rate limiting** gives each visitor a token bucket. Forwarded-IP headers are only believed from the local proxy named in `TRUST_PROXY`, and Caddy's are read from the end the visitor can't fake. IPv6 visitors are limited per /64 network (one home), so rotating addresses doesn't help.
 - **Connection caps** (total and per IP) plus a 10-second socket timeout drop slowloris-style slow connections.
 - **The EPA proxy** only talks to fueleconomy.gov. It validates every parameter against a strict pattern and caches responses for 24 h. It makes at most 4 upstream calls at a time, so your server can't be used to flood the EPA.
 - **Methods:** only GET and HEAD are accepted. Long URLs get 414.

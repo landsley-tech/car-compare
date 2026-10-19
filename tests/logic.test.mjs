@@ -121,3 +121,9 @@ test('database cars: unknown price and unknown top speed are handled honestly', 
   const noTop = { hp: 300, kg: 1500, drive: 'AWD', asp: 'turbo', top: null };
   assert.ok(raceTime(noTop, 'roll', 'dry') > 0); // unknown top speed is not treated as "too slow"
 });
+
+test('historic exemption rolls forward on 1 April, not 1 January', () => {
+  assert.notEqual(ukTax({ year: 1986, cc: 2000 }, new Date('2027-02-15')).annual, 0);  // tax year 2026/27: 1986 not exempt
+  assert.equal(ukTax({ year: 1986, cc: 2000 }, new Date('2027-04-15')).annual, 0);     // tax year 2027/28: exempt
+  assert.equal(ukTax({ year: 1985, cc: 2000 }, new Date('2027-02-15')).annual, 0);
+});
