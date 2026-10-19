@@ -14,17 +14,24 @@ Compare any car from 1899 to today: about 30,000 versions of 7,167 models from 1
 - **Race:** 0–60, ¼ mile, 50–100 mph, circuit lap or mountain pass. Run each one in the dry, wet, snow, high altitude or desert heat, as an animated race. These are estimates (see below).
 - **Configure & colours:** pick a paint and options. The price, outlines, UK car tax and spec table all update.
 - **Running costs:** UK car tax (VED) on 2025/26 rules, plus fuel tank size and range.
+- **Installable app:** in Chrome or Edge, use the install icon in the address bar (on a phone: "Add to Home Screen"). The app shell and Featured cars work offline.
 
 ## Run it
 
 Needs Python 3.10+ only. There are no packages to install.
 
+Mac / Linux:
+
 ```bash
-cd ~/Projects/car-compare
+git clone https://github.com/landsley-tech/car-compare.git   # or unzip the download
+cd car-compare
 python3 tools/build_db.py     # first time only: downloads the dataset (~25 MB) and builds data/cars.db (~6 MB)
-python3 server.py
-# open http://127.0.0.1:8000
+python3 server.py             # then open http://127.0.0.1:8000
 ```
+
+Windows (PowerShell): the same steps with `py` instead of `python3`, e.g. `py tools\build_db.py` then `py server.py`. If Python isn't installed, get 3.10+ from python.org and tick "Add Python to PATH".
+
+Press Ctrl+C to stop the server. Without the database the app still runs, with the Featured and US register tabs.
 
 Settings come from environment variables:
 
@@ -35,13 +42,13 @@ Settings come from environment variables:
 | `RATE_PER_MIN` | `120` | Requests per minute per visitor before they get "429 Too many requests" |
 | `MAX_CONN` | `64` | Total simultaneous connections |
 | `MAX_CONN_PER_IP` | `16` | Simultaneous connections per visitor |
-| `TRUST_PROXY` | off | `cloudflare` or `caddy` when running behind that proxy on the same machine (see the private guide) |
+| `TRUST_PROXY` | off | `cloudflare` or `caddy` when running behind that proxy on the same machine. Forwarded-IP headers are only trusted from 127.0.0.1 |
 
 ## Tests
 
 ```bash
-python3 -m unittest discover tests     # server, database importer + security/attack tests (37)
-node --test                            # tax, race model, outlines, escaping, catalogue checks (11)
+python3 -m unittest discover tests     # server, database importer + security/attack tests (47)
+node --test                            # tax, race model, outlines, escaping, catalogue checks (12)
 node tests/e2e.mjs                     # drives the real page in headless Chrome (add EPA=1 for the live EPA test)
 ```
 
@@ -70,10 +77,13 @@ Edit `web/data/cars.json`. Each model has dimensions, colours and add-ons, plus 
 
 Run `python3 tools/build_db.py` again, then restart the server. To build from files you've already downloaded, use `--src DIR`.
 
+## Data and licensing
+
+The code in this repo is yours to use. The **Full database** is not included: `tools/build_db.py` downloads a community scrape of autoevolution.com, and the photos load from autoevolution's servers. That data and those photos belong to autoevolution, so check their terms before using them on a public site. US EPA data is US government work (public domain).
+
 ## Accuracy notes
 
-- **Full database:** figures come from autoevolution.com, scraped in October 2024. Some versions share identical specs because of errors in that scrape. 0–60 is converted from 0–62 mph. Body style (used for outlines and race icons) is guessed from the model name and height. Coverage is strongest from the 1990s on, and a few makes (e.g. Austin, Triumph, Rover) are missing.
-
+- **Full database:** figures come from autoevolution.com, scraped in October 2024. Some versions share identical specs because of errors in that scrape. 0–60 is converted from 0–62 mph. Body style (used for outlines and race icons) is guessed from the model name and height. Coverage is strongest from the 1990s on. Classic British makes it lacks (Austin-Healey, Triumph, Rover, Morris, Jensen, Hillman, Reliant) are covered by Featured entries instead; Sunbeam, Humber, Riley and Wolseley are still missing.
 - **Featured catalogue figures** were compiled by Claude from commonly published and magazine-tested numbers. They have not been checked against official sources, so may be off for your market or spec. Prices are approximate list prices at launch in GBP. To correct anything, edit `web/data/cars.json` and run `node --test`.
 - **Race times** use tested 0–60 times where known. Everything else is estimated from power-to-weight, drivetrain, engine type and conditions. Use them for the order and the gaps, not as lap records.
 - **UK tax** uses the model year as the registration date and 2025/26 rates. The rate tables in `web/logic.js` need updating each April.
