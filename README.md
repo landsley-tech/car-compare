@@ -4,18 +4,22 @@
 
 Compare any car from 1899 to today: about 30,000 versions of 7,167 models from 122 brands, plus every US-market car since 1984. Pick one car for its full spec sheet, or line up 2–6 cars side by side.
 
-- **Find a car** with dropdowns: fuel type, era, brand, model, version/trim.
+- **Find a car** by typing its name ("golf gti") in the search box, or with dropdowns: fuel type, era, brand, model, version/trim.
 - **Three data sources** (tabs in the finder)
   - **Full database (1899–2026):** 29,971 versions with power, torque, weight, 0–60, top speed, economy, CO2, tank, dimensions, boot space and a photo. It's built into `data/cars.db` from the open autoevolution dataset (see below). Where the source is missing power, weight or size, the importer estimates them from the version name, sister versions, the car's size or the previous generation; the app marks those values with ≈.
   - **Featured:** a small curated catalogue (`web/data/cars.json`) that adds paint colours, options and launch prices.
   - **US register (1984–today):** a live lookup from the US EPA (fueleconomy.gov), including the newest US models. The EPA has no power, weight or size figures, so the server borrows them from the closest Full-database match (same make, model, years, fuel and engine size) and labels them "Closest match". No confident match means no borrowed numbers.
 - **Line-up** of up to 6 cars with photos. **Copy link** shares the exact line-up.
-- **Light/dark theme**, remembered per browser.
+- **Edit the line-up:** each card has a dropdown to swap to another version of the same model, and a **Change** button that loads the car into the finder so you can replace it with any other car in the same place.
+- **Save a line-up** in your browser and reload it later (the **Save** button). Saved line-ups stay on that device.
+- **Light/dark theme** and **UK or metric units** (hp/mph/mpg or kW/km/h/L per 100 km), remembered per browser.
 - **At a glance:** bar charts for power, torque, weight, power-to-weight, 0–60, economy and price.
-- **Dimensions to scale:** overlaid line outlines of the side, front, rear and top, plus a table with the differences.
+- **Dimensions to scale:** overlaid line outlines of the side, front, rear and top, plus a table with the differences. The front view also shows a garage door. It starts as a UK single door (2.13 × 1.98 m); type your own door or parking space size and the table says whether each car fits.
+- **In 3D:** a model of each car you can turn by dragging or with the arrow keys, all to the same scale and in your chosen colour. Below that, a detailed side-on drawing of each car next to a 1.75 m person. The shapes are typical for the body style (saloon, hatch, SUV…), sized to each car's real length, width, height and wheelbase, so they aren't exact replicas.
 - **Race:** 0–60, ¼ mile, 50–100 mph, circuit lap or mountain pass. Run each one in the dry, wet, snow, high altitude or desert heat, as an animated race. These are estimates (see below).
+- **Modifications:** pick a Stage 1 or Stage 2 remap and parts (induction kit, exhaust, intercooler, strip-out, lightweight wheels, tyres, coilovers, brakes) for any car. Power, torque, weight, 0–60 and top speed update everywhere, including the race and the drawings (a lowered car is drawn lower), with a rough cost. If the car is already modified, enter your own dyno figures instead. Share links and saved line-ups keep the mods. These are estimates (see below).
 - **Colours & options:** Featured cars have factory colours, options and prices; every other car gets the typical colours of its era (labelled as such). The price, outlines, UK car tax and spec table all update.
-- **Running costs:** UK car tax (VED) on 2025/26 rules, plus fuel tank size and range.
+- **Running costs:** UK car tax (VED) on 2025/26 rules, fuel cost a year from your own mileage and fuel prices, a ULEZ / clean air zone check, plus fuel tank size and range.
 - **Installable app:** in Chrome or Edge, use the install icon in the address bar (on a phone: "Add to Home Screen"). The app shell and Featured cars work offline.
 
 ## Run it
@@ -51,9 +55,9 @@ To run it on an always-on Linux machine (e.g. a home server), run `sudo bash dep
 ## Tests
 
 ```bash
-python3 -m unittest discover tests     # server, database importer + security/attack tests (50)
-node --test                            # tax, race model, outlines, escaping, catalogue checks (13)
-node tests/e2e.mjs                     # drives the real page in headless Chrome (add EPA=1 for the live EPA test)
+python3 -m unittest discover tests     # server, database importer + security/attack tests (52)
+node --test                            # tax, race model, mods, costs, outlines, 3D model, escaping, catalogue checks (21)
+node tests/e2e.mjs                     # 24 steps driving the real page in headless Chrome (add EPA=1 for the live EPA test)
 ```
 
 To check a running site the way the public reaches it (security headers, HTTPS, blocked attacks, speed, rate limiting):
@@ -78,11 +82,17 @@ The server is built so that one person can't easily take it down or use it to at
 - **Browser hardening:** a strict Content-Security-Policy (scripts from this site only), `nosniff`, no framing (clickjacking) and no referrer.
 - **Escaping:** every piece of data is HTML-escaped before it reaches the page.
 - **Database:** the car database is opened **read-only**, and every query uses bound parameters with validated input. The tests throw SQL injection at it.
+- **Search:** the search text is checked against the same strict pattern as every other parameter, each word is a bound parameter, and the `_` wildcard is escaped, so a search can't dump the database. Results are capped at 20.
+- **Share links and browser storage:** mod names in a link are checked against the built-in list, so made-up ones are dropped. Saved line-ups, fuel prices and space sizes read from browser storage are validated, and anything tampered with falls back to the defaults.
 - **Importer:** the downloaded dataset is treated as untrusted. HTML is stripped, impossible numbers are dropped, and only photo URLs on the autoevolution CDN are kept (no `javascript:` or other hosts). The zip is read by fixed file names, so it can't write files elsewhere (zip-slip).
 
 ## Adding cars to the catalogue
 
 Edit `web/data/cars.json`. Each model has dimensions, colours and add-ons, plus one entry per trim. Copy an existing entry as a template, then run `node --test`. The data checks will catch missing fields, bad colour codes and impossible numbers. Restart the server afterwards, because files are loaded at startup.
+
+## Changing the modification figures
+
+The remap and parts list is the `MODS` table near the top of the modifications section in `web/logic.js`. Each entry has a label, a rough fitted cost in pounds, and what it changes: `gain` is `[power ×, torque ×]` for turbo petrol (`tp`), turbo diesel (`td`) and non-turbo (`na`) engines, `kg` is a weight change, `launch` and `corner` scale the race times, and `drop` lowers the car in millimetres. Leave an engine type out of `gain` and the part isn't offered for it. Run `node --test` afterwards and restart the server.
 
 ## Updating the full database
 
@@ -94,9 +104,13 @@ The code in this repo is yours to use. The **Full database** is not included: `t
 
 ## Accuracy notes
 
-- **Full database:** figures come from autoevolution.com, scraped in October 2024. Some versions share identical specs because of errors in that scrape. 0–60 is converted from 0–62 mph. Body style (used for outlines and race icons) is guessed from the model name and height. Coverage is strongest from the 1990s on. Classic British makes it lacks (Austin-Healey, Triumph, Rover, Morris, Jensen, Hillman, Reliant) are covered by Featured entries instead; Sunbeam, Humber, Riley and Wolseley are still missing.
+- **Full database:** figures come from autoevolution.com, scraped in October 2024. Some versions share identical specs because of errors in that scrape. 0–60 is converted from 0–62 mph. Body style (used for outlines and race icons) is guessed from the model name and height. Coverage is strongest from the 1990s on. Classic British makes it lacks (Austin-Healey, Triumph, Rover, Morris, Jensen, Hillman, Reliant, Sunbeam, Humber, Riley, Wolseley) are covered by Featured entries instead, some with only one model each.
 - **Featured catalogue figures** were compiled by Claude from commonly published and magazine-tested numbers. They have not been checked against official sources, so may be off for your market or spec. Prices are approximate list prices at launch in GBP. To correct anything, edit `web/data/cars.json` and run `node --test`.
 - **Race times** use tested 0–60 times where known. Everything else is estimated from power-to-weight, drivetrain, engine type and conditions. Use them for the order and the gaps, not as lap records.
+- **Modifications** use typical gains for the type of engine (for example about 22% more power from a Stage 1 remap on a turbo petrol, about 7% on a non-turbo), not figures measured on your car. Costs are rough UK prices. Economy, CO2 and tax stay as the standard car's. In the UK you must tell your insurer about modifications.
+- **Fuel cost** uses the official mpg, which most cars don't reach in real driving. Plug-in hybrids are left out because their official mpg assumes a full battery. The starting fuel prices are placeholders: type in what you pay.
+- **ULEZ check** is a rule of thumb from fuel and year (petrol from 2006, diesel from 2016, electric and 40-year-old cars pass). Check a real car by registration on the TfL or GOV.UK checker.
+- **Fits your space** compares body width, which leaves out the mirrors (about 200 mm more).
 - **UK tax** uses the model year as the registration date and 2025/26 rates. The rate tables in `web/logic.js` need updating each April.
 - **EPA data** is US-market. Economy is converted to UK mpg and CO2 to g/km, but it comes from the US test cycle.
 
@@ -104,6 +118,34 @@ The code in this repo is yours to use. The **Full database** is not included: `t
 
 - **Design and direction: Landsley Bowerman.** Landsley planned the app, chose every feature (the car finder and filters, comparing two or more cars, to-scale outlines, running costs and car tax, colours and options, racing in different conditions, security and self-hosting), set the visual direction, and reviewed and tested the results.
 - **Code: Claude** (Anthropic's AI model, Claude Opus 5.5, working in Claude Code). Claude wrote the code, tests and documentation from Landsley's prompts.
+
+### Acknowledgements
+
+Car Compare is built on information and tools other people made. Thank you to everyone below.
+
+**Data**
+
+- **[autoevolution.com](https://www.autoevolution.com)** for the specifications and photos in the Full database. They researched and published them, and they still own the data and photos.
+- **[İlyas Özkurt](https://github.com/ilyasozkurt)** for [automobile-models-and-specs](https://github.com/ilyasozkurt/automobile-models-and-specs), the scrape of autoevolution that `tools/build_db.py` imports (data last updated 23 October 2024).
+- **The US Environmental Protection Agency and Department of Energy** for [fueleconomy.gov](https://www.fueleconomy.gov), the live source of the US register (public domain).
+- **GOV.UK** for the [vehicle tax rate tables](https://www.gov.uk/vehicle-tax-rate-tables) behind the UK car tax figures. Contains public sector information licensed under the [Open Government Licence v3.0](https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/).
+- **The car makers and the motoring press** whose published specifications, road-test figures, paint and option lists and launch prices the Featured catalogue is compiled from. Car names and badges are trademarks of their owners.
+
+**Design**
+
+- **[Lucide](https://lucide.dev)** and **[Feather](https://feathericons.com)** (Cole Bemis) for the icons.
+- **Fira Sans** by Erik Spiekermann, Ralph du Carrois and the Carrois Apostrophe team for Mozilla, served by [Google Fonts](https://fonts.google.com).
+- **ui-ux-pro-max**, the Claude Code design plugin used to shape the visual style.
+
+**Tools**
+
+- **[Python](https://www.python.org)** and **[SQLite](https://sqlite.org)**, which run the server and the car database with nothing else to install.
+- **[Node.js](https://nodejs.org)** for the unit tests, and **[Chromium](https://www.chromium.org)** from **[Playwright](https://playwright.dev)** for the end-to-end browser tests.
+- **[Anthropic](https://www.anthropic.com)**, for Claude and Claude Code.
+
+The 3D models, side drawings, outlines, person figure and race graphics are drawn by the app's own code; no 3D library or third-party artwork is used. The garage door uses the common UK size for a single up-and-over door (7 ft × 6 ft 6 in), and the person is 1.75 m, about the UK adult average.
+
+Full terms for each are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 ## Licence
 

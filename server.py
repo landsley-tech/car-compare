@@ -292,8 +292,7 @@ def db_car(row):
     dims = {k: c.pop(k) for k in ("length", "width", "height", "wheelbase")}
     extra = {"id": f"db-{c.pop('id')}", "source": "db", "make": c.pop("brand"), "model": c.pop("model_name"),
              "trim": c.pop("name"), "year": c["year_from"], "years": [c.pop("year_from"), c.pop("year_to")],
-             "dims": dims if all(dims.values()) else None}
-    c.pop("model_id", None)
+             "dims": dims if all(dims.values()) else None, "modelId": c.pop("model_id")}
     return {**c, **extra}
 
 
@@ -317,6 +316,15 @@ def db_api(path, q):
         rows = db().execute(f"SELECT e.id, e.name, e.fuel, e.hp FROM engines e{where(['e.model_id = ?'] + f)} ORDER BY e.hp, e.name",
                             [id_param(q, "model")] + p)
         return [{"id": r[0], "text": r[1], "fuel": r[2]} for r in rows]
+    if path == "/api/db/search":
+        # every word must appear somewhere in "brand model version". words are bound, and _ (the only LIKE wildcard TEXT_RE lets through) is escaped
+        words = text_param(q, "q").lower().split()[:6]
+        if not words:
+            raise ValueError("q")
+        like = ["(m.brand || ' ' || m.name || ' ' || e.name) LIKE ? ESCAPE '\\'"] * len(words)
+        rows = db().execute("SELECT e.id, m.brand, m.name, e.name, e.fuel, m.year_from, m.year_to FROM engines e JOIN models m ON m.id = e.model_id"
+                            f"{where(like)} ORDER BY m.year_from DESC, e.hp DESC LIMIT 20", ["%" + w.replace("_", "\\_") + "%" for w in words])
+        return [{"id": r[0], "text": f"{r[1]} {r[2]} · {r[3]}", "fuel": r[4], "from": r[5], "to": r[6]} for r in rows]
     if path == "/api/db/car":
         r = db().execute("SELECT e.*, m.brand, m.name AS model_name, m.year_from, m.year_to, m.image FROM engines e JOIN models m ON m.id = e.model_id"
                          " WHERE e.id = ?", [id_param(q)]).fetchone()
