@@ -114,6 +114,46 @@ The code in this repo is yours to use. The **Full database** is not included: `t
 - **UK tax** uses the model year as the registration date and 2025/26 rates. The rate tables in `web/logic.js` need updating each April.
 - **EPA data** is US-market. Economy is converted to UK mpg and CO2 to g/km, but it comes from the US test cycle.
 
+## Release notes
+
+### 12 November 2026
+
+New:
+
+- **Modifications:** choose a Stage 1 or Stage 2 remap and parts (induction kit, exhaust, intercooler, strip-out, lightweight wheels, tyres, coilovers, brakes) for any car. Power, torque, weight, 0–60 and top speed update in the charts, the race and the spec table, with a rough cost. Enter your own dyno figures if the car is already modified. Share links keep the mods.
+- **Search:** type a car's name ("golf gti") instead of using the dropdowns.
+- **Yearly running cost:** fuel and tax a year from your own mileage and fuel prices.
+- **Fits your space:** enter your own garage door or parking space size and see whether each car fits.
+- **Saved line-ups:** a Save button keeps line-ups in your browser.
+- **ULEZ / clean air zone check** in the spec table.
+- **Units switch:** hp, mph and mpg, or kW, km/h and L per 100 km.
+- **3D models** of each car that you can turn, to scale and in your chosen colour.
+- **Side drawings** of each car next to a 1.75 m person.
+- **Garage door** in the front view of the dimension outlines.
+- **Edit the line-up:** a version dropdown on each card, and a Change button to replace a car in place.
+- **Four more classic British makes** in Featured: Sunbeam Tiger, Humber Super Snipe, Riley Elf, Wolseley 6/110.
+
+Changed:
+
+- Acknowledgements and third-party notices expanded; font list corrected.
+- Tests grew to 52 Python, 21 Node and 24 browser steps.
+
+Known issues:
+
+- UK car tax still uses 2025/26 rates.
+
+### 19 October 2026
+
+First release.
+
+- Compare 1 to 6 cars from three sources: the full database (29,971 versions, 1899–2026), the Featured catalogue and the live US EPA register.
+- Overview charts, to-scale dimension outlines, race estimates in five conditions, colours and options, UK car tax and a full spec table.
+- Light and dark themes, share links, and an installable app that works offline for Featured cars.
+- Gaps in the database filled with estimates, marked with ≈.
+- Security hardening: rate limits, connection caps, strict input checks and a read-only database.
+- Home server installer (`deploy/install.sh`) and a public site checker (`tools/check_public.py`).
+- MIT licence, third-party notices and credits.
+
 ## Credits
 
 - **Design and direction: Landsley Bowerman.** Landsley planned the app, chose every feature (the car finder and filters, comparing two or more cars, to-scale outlines, running costs and car tax, colours and options, racing in different conditions, security and self-hosting), set the visual direction, and reviewed and tested the results.
