@@ -196,9 +196,30 @@ class DbApiTests(unittest.TestCase):
         s, c = self.get("/api/db/car?id=10")
         self.assertEqual((s, c["id"], c["make"], c["model"], c["source"], c["years"]), (200, "db-10", "BMW", "M4 Coupe (F82)", "db", [2014, 2020]))
         self.assertEqual(c["dims"], {"length": 4681, "width": 1869, "height": 1382, "wheelbase": 2812})
+        self.assertEqual(c["modelId"], 1)  # lets the line-up offer the other versions of this model
         self.assertNotIn("model_id", c)
         s, c = self.get("/api/db/car?id=11")
         self.assertIsNone(c["dims"])  # missing wheelbase -> no outline rather than a wrong one
+
+    def test_search_matches_every_word_in_any_order(self):
+        s, hits = self.get("/api/db/search?q=m4%20bmw")
+        self.assertEqual((s, [h["id"] for h in hits]), (200, [10]))
+        self.assertEqual(hits[0], {"id": 10, "text": "BMW M4 Coupe (F82) · 3.0L 7AT RWD (431 HP)", "fuel": "Petrol", "from": 2014, "to": 2020})
+        self.assertEqual(self.get("/api/db/search?q=TESLA")[1][0]["fuel"], "Electric")  # case doesn't matter
+        self.assertEqual(self.get("/api/db/search?q=bmw%20tesla")[1], [])               # all words, not any
+        self.assertEqual(self.get("/api/db/search?q=zzzz")[1], [])
+
+    def test_search_attacks(self):
+        for path in ["/api/db/search", "/api/db/search?q=", "/api/db/search?q=%20%20", "/api/db/search?q=%25", "/api/db/search?q=bmw%25",
+                     "/api/db/search?q=x%27%3B%20DROP%20TABLE%20engines%3B--", "/api/db/search?q=%3Cscript%3E", "/api/db/search?q=a%5Cb",
+                     "/api/db/search?q=" + "a" * 81, "/api/db/search?q=bmw%00"]:
+            self.assertEqual(self.get(path)[0], 400, path)
+        # _ is a LIKE wildcard: it must only match a real underscore, so "_" can't be used to list the whole database
+        self.assertEqual(self.get("/api/db/search?q=_")[1], [])
+        self.assertEqual(self.get("/api/db/search?q=b_w")[1], [])
+        self.assertEqual(self.get("/api/db/search?q=m4'%20--")[1], [])                  # allowed characters are just text
+        self.assertLessEqual(len(self.get("/api/db/search?q=a%20a%20a%20a%20a%20a%20a%20a%20a")[1]), 20)
+        self.assertEqual(self.get("/api/db/meta")[1]["versions"], 3)                    # tables intact
 
     def test_sql_injection_rejected(self):
         for path in ["/api/db/brands?fuel=Petrol'%20OR%20'1'='1", "/api/db/brands?fuel=Petrol%3B%20DROP%20TABLE%20engines",

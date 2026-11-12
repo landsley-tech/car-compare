@@ -29,8 +29,9 @@
       Car Compare
     </a>
     <nav class="nav" aria-label="Sections">
-      <a href="#overview">Overview</a><a href="#dimensions">Dimensions</a><a href="#race">Race</a><a href="#configure">Colours</a><a href="#specs">Specs</a>
+      <a href="#overview">Overview</a><a href="#dimensions">Dimensions</a><a href="#looks">3D</a><a href="#race">Race</a><a href="#mods">Mods</a><a href="#configure">Colours</a><a href="#costs">Costs</a><a href="#specs">Specs</a>
     </nav>
+    <button class="btn small-btn" id="units" type="button" aria-label="Switch units"></button>
     <button class="icon-btn" id="theme" type="button" aria-label="Switch to dark theme">
       <svg class="icon sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2m-7.07-17.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
       <svg class="icon moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
@@ -50,12 +51,16 @@
       <button role="tab" type="button" data-src="featured" aria-selected="false">Featured</button>
       <button role="tab" type="button" data-src="epa" aria-selected="false">US register</button>
     </div>
+    <label class="field"><span>Search every car</span>
+      <input id="q" type="search" maxlength="80" autocomplete="off" spellcheck="false" placeholder="Type a name, e.g. golf gti"></label>
+    <ul class="hits" id="hits" aria-label="Search results"></ul>
     <p class="muted small" id="src-hint"></p>
     <div class="fields" id="fields"></div>
     <div class="row">
       <button class="btn primary" id="add" type="button" disabled>
-        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg>Add to comparison
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M12 5v14"/></svg><span id="add-label">Add to comparison</span>
       </button>
+      <button class="btn" id="cancel-replace" type="button" hidden>Cancel</button>
       <span class="status" id="status" role="status" aria-live="polite"></span>
     </div>
   </section>
@@ -67,9 +72,11 @@
         <button class="btn" id="share" type="button" disabled>
           <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>Copy link
         </button>
+        <button class="btn" id="save" type="button" disabled>Save</button>
         <button class="btn" id="clear" type="button" disabled>Clear</button>
       </div>
     </div>
+    <div class="row saved" id="saved" aria-label="Saved line-ups"></div>
     <div class="tray" id="tray"></div>
   </section>
 
@@ -82,8 +89,22 @@
     <section id="dimensions" aria-labelledby="dims-title">
       <h2 id="dims-title">Dimensions</h2>
       <p class="muted small">To scale, overlaid.</p>
+      <div class="row end nums" id="space">
+        <label class="field"><span>Your garage door or space: width (m)</span><input id="sp-width" type="number" min="0.5" max="20" step="0.01" inputmode="decimal"></label>
+        <label class="field"><span>Height (m)</span><input id="sp-height" type="number" min="0.5" max="20" step="0.01" inputmode="decimal"></label>
+        <label class="field"><span>Length (m), optional</span><input id="sp-length" type="number" min="0" max="20" step="0.01" inputmode="decimal"></label>
+      </div>
       <div class="views" id="views"></div>
       <div class="table-box"><table id="dims-table"></table></div>
+    </section>
+
+    <section id="looks" aria-labelledby="looks-title">
+      <h2 id="looks-title">In 3D</h2>
+      <p class="muted small" id="looks-hint">Drag or use the arrow keys to turn them. All to the same scale, in your chosen colours. Body shapes are typical for the style, sized to each car's real measurements.</p>
+      <div class="models" id="models"></div>
+      <h3 class="sub-title">Next to a person</h3>
+      <p class="muted small">Side on, to scale, beside a 1.75 m person.</p>
+      <div class="profiles" id="profiles"></div>
     </section>
 
     <section id="race" aria-labelledby="race-title">
@@ -107,9 +128,26 @@
       </div>
     </section>
 
+    <section id="mods" aria-labelledby="mods-title">
+      <h2 id="mods-title">Modifications</h2>
+      <p class="muted small">Pick a remap and parts to see what they'd do. The new figures feed the charts, the race and the spec table.</p>
+      <div class="card cfg" id="mod-card"></div>
+    </section>
+
     <section id="configure" aria-labelledby="cfg-title">
       <h2 id="cfg-title">Colours &amp; options</h2>
       <div class="card cfg" id="cfg"></div>
+    </section>
+
+    <section id="costs" aria-labelledby="costs-title">
+      <h2 id="costs-title">Running costs</h2>
+      <p class="muted small">Set your mileage and what you pay. The yearly cost shows in the overview and the spec table.</p>
+      <div class="card row end nums" id="cost-inputs">
+        <label class="field"><span>Miles a year</span><input id="c-miles" type="number" min="0" max="100000" step="500" inputmode="numeric"></label>
+        <label class="field"><span>Petrol (p a litre)</span><input id="c-petrol" type="number" min="0" max="1000" step="0.1" inputmode="decimal"></label>
+        <label class="field"><span>Diesel (p a litre)</span><input id="c-diesel" type="number" min="0" max="1000" step="0.1" inputmode="decimal"></label>
+        <label class="field"><span>Electricity (p a kWh)</span><input id="c-elec" type="number" min="0" max="1000" step="0.1" inputmode="decimal"></label>
+      </div>
     </section>
 
     <section id="specs" aria-labelledby="specs-title">
@@ -124,7 +162,12 @@
 
 <footer class="container footer muted small">
   <p class="copyright">© 2026 Landsley Bowerman. Designed by Landsley Bowerman, built with Claude by Anthropic. MIT licence.</p>
-  <p>Data: autoevolution (All cars), US EPA fueleconomy.gov (US register), own catalogue (Featured). Figures vary by market. UK car tax uses 2025/26 rates; check gov.uk. Car names are trademarks of their owners.</p>
+  <p>Data: <a href="https://www.autoevolution.com" rel="noopener">autoevolution.com</a> specs and photos (All cars), via
+    <a href="https://github.com/ilyasozkurt/automobile-models-and-specs" rel="noopener">İlyas Özkurt's automobile-models-and-specs</a>;
+    <a href="https://www.fueleconomy.gov" rel="noopener">US EPA / DOE fueleconomy.gov</a> (US register); own catalogue (Featured).
+    Icons: <a href="https://lucide.dev" rel="noopener">Lucide</a> (ISC) and Feather (MIT). Font: Fira Sans (SIL OFL) via Google Fonts.
+    3D models and drawings are drawn by this app.</p>
+  <p>Figures vary by market. UK car tax uses 2025/26 rates from <a href="https://www.gov.uk/vehicle-tax-rate-tables" rel="noopener">GOV.UK</a> (contains public sector information licensed under the Open Government Licence v3.0); check there before relying on it. Car names are trademarks of their owners; this site isn't affiliated with any of them. See <a href="https://github.com/landsley-tech/car-compare/blob/main/THIRD-PARTY-NOTICES.md" rel="noopener">third-party notices</a>.</p>
 </footer>
 </body>
 </html>

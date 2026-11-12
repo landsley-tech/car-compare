@@ -74,7 +74,8 @@ try {
   await cdp('Page.navigate', { url: BASE });
   await waitFor(`document.getElementById('f-make')?.options.length > 100`);
   assert.match(await js(`document.getElementById('counts').textContent`), /29,971 versions/);
-  step('page loads on the full database (122 brands, counts shown)');
+  assert.equal(await js(`getComputedStyle(document.querySelector('.tabs')).overflowX`), 'visible', 'source tabs must not be a scroll box');
+  step('page loads on the full database (122 brands, counts shown); source tabs have no scrollbar');
 
   // a malformed share link is ignored, not an error
   await cdp('Page.navigate', { url: BASE + '#cars=%E0%A4' });
@@ -147,10 +148,10 @@ try {
 
   // configurator on the featured Audi
   await js(`(() => { const s = document.getElementById('cfg-car'); s.value = 'audi-a3-8y:s3'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  assert.equal(await js(`document.querySelector('.total strong').textContent`), '£48,000');
+  assert.equal(await js(`document.querySelector('#cfg .total strong').textContent`), '£48,000');
   await js(`document.querySelectorAll('.swatch input')[1].click()`);
-  await js(`document.querySelectorAll('.option input')[0].click()`);
-  assert.equal(await js(`document.querySelector('.total strong').textContent`), '£49,945');
+  await js(`document.querySelectorAll('#cfg .option input')[0].click()`);
+  assert.equal(await js(`document.querySelector('#cfg .total strong').textContent`), '£49,945');
   assert.match(await js(`document.getElementById('spec-table').textContent`), /Kemora Grey/);
   await js(`(() => { const s = document.getElementById('cfg-car'); s.value = s.options[0].value; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
   assert.match(await js(`document.getElementById('cfg').textContent`), /Typical colours of the 2010s/);
@@ -189,6 +190,51 @@ try {
   assert.equal(await js(`document.querySelectorAll('.slot:not(.add)').length`), 4);
   step('remove a car');
 
+  // swap a version from the card's dropdown: same slot and colour slot, paint carried over
+  const audi = `[...document.querySelectorAll('.slot')].find(s => s.textContent.includes('S3 TFSI'))`;
+  await waitFor(`!${audi}.querySelector('select.ver').hidden`);
+  const before = await js(`${audi}.style.cssText`);
+  await js(`(() => { const s = document.getElementById('cfg-car'); s.value = 'audi-a3-8y:s3'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await js(`document.querySelectorAll('.swatch input')[1].click()`);
+  const paintName = await js(`document.querySelectorAll('.swatch')[1].textContent.trim().split(/\\s{2,}|\\n/)[0]`);
+  await js(`(() => { const s = ${audi}.querySelector('select.ver'); s.value = 'audi-a3-8y:35'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await waitFor(`[...document.querySelectorAll('.slot')].some(s => s.textContent.includes('A3 35 TFSI Sport'))`);
+  assert.equal(await js(`[...document.querySelectorAll('.slot')].find(s => s.textContent.includes('A3 35 TFSI Sport')).style.cssText`), before);
+  assert.equal(await js(`document.querySelectorAll('.slot:not(.add)').length`), 4);
+  assert.ok((await js(`document.getElementById('spec-table').textContent`)).includes(paintName), 'paint carried over: ' + paintName);
+  step('card dropdown swaps the Audi S3 for the A3 35 in place, keeping its paint');
+
+  // Change: replace the first car with a different model through the finder, in the same position
+  await js(`document.querySelector('[data-change]').click()`);
+  await idle();
+  assert.match(await js(`document.getElementById('add-label').textContent`), /^Replace M4/);
+  assert.notEqual(await js(`document.getElementById('f-version').value`), '', 'finder pre-filled with the car being changed');
+  await choose('make', 'Porsche'); await choose('model', '911', { text: true }); await firstVersion();
+  await js(`document.getElementById('add').click()`);
+  await waitFor(`/Replaced the M4/.test(document.getElementById('status').textContent)`);
+  assert.equal(await js(`document.querySelectorAll('.slot:not(.add)').length`), 4);
+  assert.match(await js(`document.querySelector('.slot .model').textContent`), /^911/);
+  assert.equal(await js(`document.getElementById('add-label').textContent`), 'Add to comparison');
+  await js(`document.querySelectorAll('[data-change]')[1].click()`);
+  await js(`document.getElementById('cancel-replace').click()`);
+  assert.equal(await js(`document.getElementById('add-label').textContent`), 'Add to comparison');
+  step('Change replaces the M4 with a Porsche 911 in slot 1; Cancel backs out');
+
+  // 3D models, side drawings beside a person, garage door in the front view
+  await js(`document.getElementById('looks').scrollIntoView()`);
+  assert.equal(await js(`document.querySelectorAll('#models canvas').length`), 4);
+  const inked = `(() => { const c = document.querySelector('#models canvas'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0; for (let i = 3; i < d.length; i += 4) n += d[i] > 0; return n; })()`;
+  assert.ok(await js(inked) > 2000, '3D canvas is blank');
+  const frame = await js(`document.querySelector('#models canvas').toDataURL()`);
+  await js(`document.querySelector('#models canvas').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))`);
+  assert.notEqual(await js(`document.querySelector('#models canvas').toDataURL()`), frame, 'arrow key turns the model');
+  assert.equal(await js(`document.querySelectorAll('#profiles svg .person').length`), 8); // head + body per row
+  assert.equal(await js(`document.querySelectorAll('#profiles svg .glass').length`), 4);
+  assert.equal(await js(`document.querySelectorAll('.view .door').length`), 1);
+  await shot('looks.png', 1280, 900);
+  step('3D models drawn and turn with the arrow keys; side drawings next to a person; garage door in the front view');
+
   if (process.env.EPA) {
     await js(`document.querySelector('[data-src="epa"]').click()`);
     await waitFor(`document.getElementById('f-year')?.options.length > 30`);
@@ -204,6 +250,117 @@ try {
     assert.doesNotMatch(await js(`document.getElementById('strip').textContent`), /No power or weight data/);
     step('live EPA lookup: 2018 BMW M4 Coupe added, matched to the database, and it can race');
   }
+
+  // ---- new features: search, mods, running costs, fit check, ULEZ, units, saved line-ups ----
+  const table = id => js(`document.getElementById('${id}').textContent`);
+  const setInput = (sel, v, ev = 'change') => js(`(() => { const i = document.querySelector(${JSON.stringify(sel)}); i.value = ${JSON.stringify(String(v))};
+    i.dispatchEvent(new Event('${ev}', { bubbles: true })); })()`);
+  await js(`document.getElementById('clear').click()`);
+  await setInput('#q', 'golf gti', 'input');
+  await waitFor(`document.querySelectorAll('#hits [data-hit]').length > 3`);
+  assert.ok(await js(`[...document.querySelectorAll('#hits button')].every(b => /golf/i.test(b.textContent) && /gti/i.test(b.textContent))`), 'every hit has both words');
+  await setInput('#q', `<img src=x onerror="document.title='pwned'"> ' OR 1=1 --`, 'input');
+  await waitFor(`document.querySelector('#hits li.muted')`);
+  assert.equal(await js(`document.title + document.querySelectorAll('#hits img').length`), 'Car Compare0');
+  await setInput('#q', 'sunbeam tiger', 'input');
+  await waitFor(`document.querySelector('#hits [data-hit="sunbeam-tiger:260"]')`);
+  await setInput('#q', 'golf r32', 'input');
+  await waitFor(`document.querySelector('#hits [data-hit="vw-golf-r32-mk5:man"]')`);
+  await js(`document.querySelector('#hits [data-hit="vw-golf-r32-mk5:man"]').click()`);
+  await waitFor(`document.querySelectorAll('.slot:not(.add)').length === 1`);
+  await setInput('#q', 'golf gti', 'input');
+  await waitFor(`document.querySelector('#hits [data-hit^="db-"]')`);
+  await js(`[...document.querySelectorAll('#hits [data-hit^="db-"]')].find(b => /turbo|TSI|TFSI/i.test(b.textContent) || true).click()`);
+  await waitFor(`document.querySelectorAll('.slot:not(.add)').length === 2`);
+  step('search: every word must match, hostile text is harmless, clicking a hit adds the car (Featured and database); new British makes found');
+
+  // mods on the Golf R32 (non-turbo 3.2 V6, 247 hp): stage 1 is 7%, there is no stage 2, lowering changes the drawing
+  await js(`(() => { const s = document.getElementById('mod-car'); s.value = 'vw-golf-r32-mk5:man'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  assert.equal(await js(`document.querySelectorAll('#mod-card input[name=tune]').length`), 2, 'non-turbo: Standard and Stage 1 only');
+  const stockRace = await js(`document.getElementById('race-results').textContent`);
+  const stockSide = await js(`document.querySelector('#views .view svg').innerHTML`);
+  await js(`document.querySelector('#mod-card input[value=stage1]').click()`);
+  await js(`document.querySelector('#mod-card input[value=suspension]').click()`);
+  assert.match(await table('mod-table'), /Standard247 hp.*Modified≈264 hp/s);
+  assert.match(await table('spec-table'), /≈264 hp/);
+  assert.match(await table('spec-table'), /Stage 1 remap, Coilovers, 30 mm lower/);
+  assert.match(await table('spec-table'), /Mods cost.*£1,300/s);
+  assert.match(await js(`document.getElementById('tray').textContent`), /modified/);
+  assert.notEqual(await js(`document.getElementById('race-results').textContent`), stockRace, 'mods change the race');
+  assert.notEqual(await js(`document.querySelector('#views .view svg').innerHTML`), stockSide, 'lowered car is drawn lower');
+  assert.match(await js(`location.hash`), /vw-golf-r32-mk5%3Aman~stage1\.suspension/);
+  // your own dyno figure wins, and nonsense is ignored
+  await setInput('#mod-card [data-dyno=hp]', 281);
+  assert.match(await table('mod-table'), /Modified281 hp/);
+  await setInput('#mod-card [data-dyno=hp]', 99999999);
+  assert.match(await table('mod-table'), /Modified≈264 hp/);
+  // the turbo database Golf gets a stage 2 that ticks and locks its three parts
+  await js(`(() => { const s = document.getElementById('mod-car'); s.value = s.options[1].value; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  if (await js(`!!document.querySelector('#mod-card input[value=stage2]')`)) {
+    await js(`document.querySelector('#mod-card input[value=stage2]').click()`);
+    assert.equal(await js(`document.querySelectorAll('#mod-card input[type=checkbox]:checked:disabled').length`), 3);
+  }
+  // a share link carries the mods; made-up mod names in a link are dropped
+  const modLink = await js(`location.href`);
+  await js(`location.hash = '#cars=' + encodeURIComponent('vw-golf-r32-mk5:man~stage1.__proto__.<script>.stage9')`);
+  await waitFor(`document.querySelectorAll('.slot:not(.add)').length === 1 && /≈264 hp/.test(document.getElementById('spec-table').textContent)`);
+  assert.match(await table('spec-table'), /Modifications.*Stage 1 remap\s*Mods cost/s);
+  await js(`location.href = ${JSON.stringify(modLink)}`);
+  await waitFor(`document.querySelectorAll('.slot:not(.add)').length === 2 && /Coilovers/.test(document.getElementById('spec-table').textContent)`);
+  step('mods: remap and parts change power, the race, the drawings and the spec table; dyno figures win; share links keep mods and drop fake ones');
+
+  // running costs: R32 does 26 mpg -> 8,000 miles is 307.7 gallons = 1,398.8 litres
+  await setInput('#c-miles', 8000); await setInput('#c-petrol', 150);
+  assert.match(await table('spec-table'), /Fuel a year£2,098/);
+  await setInput('#c-petrol', 100);
+  assert.match(await table('spec-table'), /Fuel a year£1,399/);
+  await setInput('#c-petrol', -5);
+  assert.equal(await js(`document.getElementById('c-petrol').value`), '100', 'bad price put back');
+  assert.match(await js(`document.getElementById('metrics').textContent`), /Fuel and tax a year/);
+  assert.match(await table('spec-table'), /ULEZ \/ clean air zones.*(Likely fine|Depends on the year|Likely charged)/s);
+  step('running costs follow your mileage and fuel price; bad input is refused; ULEZ row shown');
+
+  // will it fit: default door fits a Golf; a 1.5 m wide gap doesn't
+  assert.match(await table('dims-table'), /Fits your spaceYes/);
+  await setInput('#sp-width', 1.5);
+  assert.match(await table('dims-table'), /Fits your spaceNo: \d+ mm too wide/);
+  assert.match(await js(`document.querySelector('#views .legend:has(.door-key)').textContent`), /Your space, 1\.50 × 1\.98 m/);
+  await setInput('#sp-width', 0);
+  assert.equal(await js(`document.getElementById('sp-width').value`), '1.5', 'zero width refused');
+  await setInput('#sp-width', 2.134);
+  step('fit check uses your own door or space size');
+
+  // units
+  await js(`document.getElementById('units').click()`);
+  assert.match(await table('spec-table'), /≈197 kW/);                      // 264 hp
+  assert.match(await table('spec-table'), /km\/h/);
+  assert.match(await table('spec-table'), /L\/100 km/);
+  await js(`document.getElementById('units').click()`);
+  assert.match(await table('spec-table'), /≈264 hp/);
+  step('units switch: kW, km/h and L/100 km, and back');
+
+  // saved line-ups survive a reload, restore the cars with their mods, and tampered storage is ignored
+  await js(`document.getElementById('save').click()`);
+  assert.equal(await js(`document.querySelectorAll('#saved .chip').length`), 1);
+  await js(`document.getElementById('clear').click()`);
+  await cdp('Page.reload'); await waitFor(`document.querySelectorAll('#saved .chip').length === 1`);
+  await js(`document.querySelector('#saved [data-load]').click()`);
+  await waitFor(`document.querySelectorAll('.slot:not(.add)').length === 2 && /Coilovers/.test(document.getElementById('spec-table').textContent)`);
+  assert.equal(await js(`document.getElementById('c-petrol').value`), '100', 'fuel price remembered');
+  await js(`localStorage.setItem('lineups', JSON.stringify([{ name: '<img src=x onerror="document.title=1">', hash: 'javascript:alert(1)' }, { name: 5, hash: '#cars=x' }, 'x']));
+    localStorage.setItem('costs', '{"miles":"<b>","petrol":-1,"diesel":1e99}'); localStorage.setItem('space', 'not json')`);
+  await cdp('Page.reload'); await waitFor(`document.getElementById('f-make')?.options.length > 100`);
+  assert.equal(await js(`document.querySelectorAll('#saved .chip').length + document.title`), '0Car Compare');
+  assert.deepEqual(await js(`['c-miles', 'c-petrol', 'c-diesel', 'sp-width'].map(i => document.getElementById(i).value)`), ['8000', '140', '148', '2.134']);
+  await js(`localStorage.clear()`);
+  step('saved line-ups reload with their mods; tampered browser storage falls back to defaults');
+
+  await cdp('Emulation.setDeviceMetricsOverride', { width: 375, height: 800, deviceScaleFactor: 1, mobile: true });
+  await sleep(300);
+  assert.ok(await js(`document.documentElement.scrollWidth <= window.innerWidth`), 'no sideways scroll on a phone with the new sections');
+  await shot('new-phone.png', 375, 800);
+  await shot('new-desktop.png', 1280, 900);
+  step('new sections fit a phone screen');
 
   const problems = events.filter(e => e.method === 'Runtime.exceptionThrown' ||
     (e.method === 'Log.entryAdded' && e.params.entry.level === 'error' && !(e.params.entry.source === 'network' && /fonts\.g|autoevolution/.test(e.params.entry.url || ''))) ||
