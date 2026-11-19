@@ -52,6 +52,20 @@ Settings come from environment variables:
 
 To run it on an always-on Linux machine (e.g. a home server), run `sudo bash deploy/install.sh` from a clone. It installs the app as a sandboxed systemd service that starts on boot and restarts if it crashes, reachable on your home network and Tailscale at port 8000. Run it again to update.
 
+## Update to the latest version
+
+Stop the server (Ctrl+C), then from the `car-compare` folder:
+
+```bash
+git pull                      # gets the latest code; your data/cars.db is kept (it isn't in git)
+python3 tools/build_db.py     # optional: only needed if the release notes say the database changed
+python3 server.py             # start it again
+```
+
+On Windows use `py` instead of `python3`. If you downloaded a zip instead of cloning, download the new zip, unzip it, and copy `data/cars.db` across from your old folder (or run `build_db.py` again). If you installed it as a home-server service, run `git pull` in your clone and then `sudo bash deploy/install.sh` again.
+
+Your saved line-ups, theme and units are stored in your browser, so updating doesn't touch them. If the page still looks old after updating, hard-refresh it (Ctrl+Shift+R, or Cmd+Shift+R on a Mac). The installed app picks up the new version the next time it's opened online.
+
 ## Tests
 
 ```bash
