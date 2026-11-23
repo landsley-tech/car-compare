@@ -144,7 +144,17 @@ try {
   await js(`document.getElementById('go').click()`);
   await waitFor(`document.querySelector('#go span').textContent === 'Restart'`);
   await waitFor(`document.querySelectorAll('.res').length > 0 && document.querySelectorAll('.res.pending').length === 0`, 40000);
-  step('race: wet ¼ mile runs to the finish; Beetle shown as DNF in 50–100');
+  // the review-style events: braking is shown as a distance, and every event has a lane for every car
+  await js(`(() => { const v = document.getElementById('env'); v.value = 'dry'; v.dispatchEvent(new Event('change'));
+    const e = document.getElementById('event'); e.value = 'brake'; e.dispatchEvent(new Event('change')); })()`);
+  assert.match(await js(`document.getElementById('race-results').textContent`), /P1.*\d\d\.\d m in \d\.\d\d s/s);
+  assert.equal(await js(`document.querySelectorAll('#strip .dnf').length`), 0, 'every car can brake');
+  assert.deepEqual(await js(`[...document.getElementById('event').options].map(o => o.value)`), ['z60', 'z100', 'qm', 'r3070', 'roll', 'brake', 'lap', 'hill']);
+  await js(`(() => { const e = document.getElementById('event'); e.value = 'z100'; e.dispatchEvent(new Event('change')); })()`);
+  assert.match(await js(`document.getElementById('strip').textContent`), /Can't reach 100 mph/);
+  await js(`(() => { const e = document.getElementById('event'); e.value = 'r3070'; e.dispatchEvent(new Event('change')); })()`);
+  assert.match(await js(`document.getElementById('race-name').textContent`), /30–70 mph/);
+  step('race: wet ¼ mile runs to the finish; Beetle shown as DNF in 50–100; braking shown in metres; 0–100 and 30–70 run');
 
   // configurator on the featured Audi
   await js(`(() => { const s = document.getElementById('cfg-car'); s.value = 'audi-a3-8y:s3'; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
@@ -374,7 +384,10 @@ try {
   await cdp('Network.enable');
   await cdp('Page.navigate', { url: BASE });
   await waitFor(`!!navigator.serviceWorker.controller`, 15000);
+  await waitFor(`document.getElementById('f-make')?.options.length > 100`); // fully started, so nothing is still in flight
   await cdp('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: -1, uploadThroughput: -1 });
+  // a full page load with no network, the way someone opens a saved link offline
+  await cdp('Page.navigate', { url: 'about:blank' });
   await cdp('Page.navigate', { url: BASE + '#cars=mini-mk1:850' });
   await waitFor(`document.querySelectorAll('.slot:not(.add)').length === 1`, 15000);
   assert.match(await js(`document.getElementById('spec-table').textContent`), /Mini/);

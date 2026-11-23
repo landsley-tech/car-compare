@@ -6,7 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { esc, ukTax, raceTime, EVENTS, ENVS, outline, iconOutline, eraColours, flatten, configPrice,
-  carMesh, sideDetail, PERSON, GARAGE_DOOR, MODS, modsFor, modList, applyMods, yearlyCost, ulez, fits } from '../web/logic.js';
+  carMesh, sideDetail, PERSON, GARAGE_DOOR, grip, estTop, MODS, modsFor, modList, applyMods, yearlyCost, ulez, fits } from '../web/logic.js';
 
 const models = JSON.parse(readFileSync(new URL('../web/data/cars.json', import.meta.url)));
 const cars = flatten(models);
@@ -256,4 +256,44 @@ test('fits: checks width, height and (if given) length, and warns when mirrors m
   assert.equal(fits(d, { width: 2134, height: 1981, length: 4000 }).worst, 'length');
   assert.equal(fits(null, GARAGE_DOOR), null);
   assert.equal(fits(applyMods(GTI, ['suspension']).dims, { width: 2134, height: 1440 }).ok, true); // 30 mm lower now clears it
+});
+
+/* ---------- physics model and the review-style events ---------- */
+const M4 = byId('bmw-m4-f82:m4'), BEETLE = byId('vw-beetle-54:1200'), TESLA = byId('tesla-model3:p');
+
+test('race events: 0-100, 30-70 and braking behave like the real tests', () => {
+  for (const c of [M4, TESLA, GTI]) {
+    const [z60, z100, qm, mid, roll] = ['z60', 'z100', 'qm', 'r3070', 'roll'].map(ev => raceTime(c, ev, 'dry'));
+    assert.ok(z100 > z60 * 1.8 && z100 < z60 * 3.2, `${c.id}: 0-100 ${z100} vs 0-60 ${z60}`);
+    assert.ok(qm > z60 + 5 && qm < z60 + 11, `${c.id}: quarter mile ${qm}`);
+    assert.ok(mid < roll && mid > 1.5, `${c.id}: 30-70 ${mid}, 50-100 ${roll}`);
+  }
+  assert.ok(Math.abs(raceTime(M4, 'qm', 'dry') - 12.2) < 0.8, 'M4 quarter mile is about 12.2 s in road tests');
+  assert.ok(Math.abs(raceTime(M4, 'z100', 'dry') - 8.8) < 1.2, 'M4 0-100 is about 8.8 s in road tests');
+  // a 1950s Beetle tops out near 70 mph: it can sprint to 60 but never sees 100
+  assert.ok(raceTime(BEETLE, 'z60', 'dry') > 25);
+  assert.equal(raceTime(BEETLE, 'z100', 'dry'), null);
+  assert.ok(raceTime(BEETLE, 'qm', 'dry') > 21);
+});
+
+test('braking: modern tyres stop in about 35 m from 60, old ones need far longer, wet and snow longer still', () => {
+  const stop = (c, env = 'dry') => EVENTS.brake.metres(raceTime(c, 'brake', env));
+  assert.ok(stop(M4) > 29 && stop(M4) < 36, `M4 ${stop(M4)} m`);
+  assert.ok(stop(BEETLE) > 45 && stop(BEETLE) < 60, `Beetle ${stop(BEETLE)} m`);
+  assert.ok(stop(M4, 'wet') > stop(M4) * 1.3 && stop(M4, 'snow') > stop(M4) * 3);
+  assert.ok(stop(applyMods(GTI, ['tyres', 'brakes'])) < stop(GTI));
+  assert.ok(grip({ year: 1955, hp: 30, kg: 700 }) < grip({ year: 1985, hp: 100, kg: 1000 }) && grip({ year: 1985, hp: 100, kg: 1000 }) < grip({ year: 2020, hp: 500, kg: 1500 }));
+});
+
+test('physics: traction, thin air and drag pull the right way', () => {
+  const car = { year: 2018, fuel: 'Petrol', asp: 'na', hp: 400, kg: 1500, box: '6-Speed Manual', body: 'coupe' };
+  const t = (drive, env, ev = 'z60') => raceTime({ ...car, drive }, ev, env);
+  assert.ok(t('AWD', 'snow') < t('RWD', 'snow') && t('AWD', 'wet') < t('FWD', 'wet'));    // four driven wheels win when it's slippery
+  assert.ok(t('RWD', 'dry') < t('FWD', 'dry'));                                           // weight moves backwards under power
+  assert.ok(t('RWD', 'altitude', 'z100') > t('RWD', 'dry', 'z100'));                      // 25% less power beats 22% less drag
+  assert.ok(raceTime({ ...car, drive: 'RWD', fuel: 'Electric', asp: 'electric' }, 'z100', 'altitude') < t('RWD', 'dry', 'z100') * 1.02); // an EV loses nothing, and gains from thin air
+  assert.ok(estTop({ ...car, body: 'suv' }) < estTop({ ...car, body: 'coupe' }));         // a blunt body is slower flat out
+  assert.ok(estTop({ ...car, hp: 800 }) < estTop(car) * 1.3);                             // double the power is nowhere near double the speed
+  assert.ok(raceTime({ ...car, drive: 'RWD', box: '8-Speed Automatic' }, 'z100', 'dry') < t('RWD', 'dry', 'z100')); // quicker shifts
+  assert.equal(raceTime({ ...car, drive: 'RWD', hp: 8, kg: 2500 }, 'z100', 'dry'), null);  // 8 hp in 2.5 tonnes never gets to 100
 });

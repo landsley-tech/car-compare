@@ -108,6 +108,29 @@ class BuilderTests(unittest.TestCase):
         self.assertIsNone(r["wheelbase"])
         self.assertEqual(r["year_to"], None)                  # "Present"
 
+    def test_cross_check_fixes_or_drops_figures_that_contradict_each_other(self):
+        base = {"hp": 180, "kg": 1800, "z60": 8.6, "top": 138, "length": 4573, "width": 1777, "height": 1391}
+        fix = lambda name="", **kw: build_db.cross_check({**base, **kw}, name)
+        self.assertEqual(fix(), base)                                                    # a consistent car is left alone
+        self.assertEqual(fix("2.7L TDI CVT (180 HP)", hp=18)["hp"], 180)                 # dropped digit: the name fits the 0-60
+        self.assertEqual(fix("5.2L V10 6AT (235 HP)", hp=435, kg=1910, z60=5.0)["hp"], 435)  # here the name is the wrong one
+        self.assertEqual(fix("Cooper S (1745 HP)", hp=174, kg=1205, z60=6.8, top=140)["hp"], 174)
+        self.assertEqual(fix(z60=1.9, hp=90, kg=1565, top=99)["z60"], None)              # 90 hp people carrier "0-60 in 1.9 s"
+        self.assertEqual(fix(z60=21.6, hp=261, kg=2007)["z60"], None)
+        self.assertEqual(fix(hp=1850, kg=1240, z60=2.1, top=311)["z60"], 2.1)            # a hypercar really is that quick
+        self.assertEqual(fix(top=222)["top"], 138)                                       # km/h stored as mph
+        self.assertEqual(fix(hp=245, kg=1670, z60=6.2, top=34)["top"], None)             # 5 Series "34 mph"
+        self.assertEqual(fix(hp=105, kg=1190, z60=12, top=292)["top"], None)             # Bluebird "292 mph": not km/h either
+        self.assertEqual(fix(hp=450, kg=1900, z60=4.4, top=155)["top"], 155)             # a limited 155 mph is real
+        self.assertEqual(fix(kg=3968)["kg"], 1800)                                       # pounds stored as kg
+        self.assertEqual(fix(kg=482, hp=150, z60=7.4)["kg"], None)                       # too light for its size: re-estimated later
+        self.assertEqual(fix(kg=540, hp=135, z60=5.0, top=122, length=3100, width=1575, height=1090)["kg"], 540)  # a Caterham is light
+        self.assertEqual(fix("1.5L VC-T MHEV Xtronic (163 HP)", hp=1463, kg=None, z60=None, cc=1497)["hp"], 163)  # no 0-60: 977 hp a litre is not believable
+        self.assertEqual(fix("Cooper S 1.6L (1745 HP)", hp=174, kg=None, z60=None, cc=1598)["hp"], 174)
+        self.assertEqual(fix("300 de 9AT (306 HP)", hp=194, kg=2000, z60=5.7, top=155)["hp"], 306)          # hybrid: engine-only figure
+        none = build_db.cross_check({k: None for k in base}, "x (0 HP) (99999 HP)")      # nothing to go on: no crash
+        self.assertTrue(all(v is None for v in none.values()))
+
     def test_bad_rows_skipped(self):
         ids = {r[0] for r in self.db.execute("SELECT id FROM engines")}
         self.assertEqual(ids, {10, 11, 12})                   # broken JSON and orphan engine skipped
