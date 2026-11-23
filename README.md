@@ -11,7 +11,7 @@ Pick a car for its full spec sheet, or line up two to six and see them against e
 ![Versions](https://img.shields.io/badge/versions-29%2C971-d92d2d?style=flat-square)
 ![Brands](https://img.shields.io/badge/brands-122-d92d2d?style=flat-square)
 ![Years](https://img.shields.io/badge/years-1899%E2%80%932026-4f5a6b?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-108%20passing-2b8c62?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-110%20passing-2b8c62?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3b6fd8?style=flat-square)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-2b8c62?style=flat-square)
 ![Licence](https://img.shields.io/badge/licence-MIT-4f5a6b?style=flat-square)
@@ -321,18 +321,18 @@ flowchart LR
 
 ## ✦ Tests
 
-**108 tests**, plus a checker for a live site.
+**110 tests**, plus a checker for a live site.
 
 ```bash
-python3 -m unittest discover tests     # server, database importer + security/attack tests (53)
-node --test                            # tax, race model, mods, costs, outlines, 3D model, escaping, catalogue, whole-fleet checks (30)
+python3 -m unittest discover tests     # server, database importer + security/attack tests (54)
+node --test                            # tax, race model, mods, costs, outlines, 3D model, escaping, catalogue, whole-fleet checks (31)
 node tests/e2e.mjs                     # 25 steps driving the real page in headless Chrome (add EPA=1 for the live EPA test)
 ```
 
 | Suite | Count | What it proves |
 |---|:---:|---|
-| `tests/test_*.py` | 53 | The server, security headers, rate limits, connection caps, the EPA proxy and the importer. **Attacks:** path traversal, SQL injection, floods, slowloris, oversized and malformed requests, spoofed forwarding headers behind Cloudflare and Caddy, hostile dataset rows and zip-slip. |
-| `tests/*.test.mjs` | 30 | UK tax, the race model, mods, running costs, outlines, the 3D model, escaping and catalogue data. Every car in the database and catalogue goes through the app's maths, and the race model is checked against tested 0–60 times and top speeds. |
+| `tests/test_*.py` | 54 | The server, security headers, rate limits, connection caps, the EPA proxy and the importer. **Attacks:** path traversal, SQL injection, floods, slowloris, oversized and malformed requests, spoofed forwarding headers behind Cloudflare and Caddy, hostile dataset rows and zip-slip. |
+| `tests/*.test.mjs` | 31 | UK tax, the race model, mods, running costs, outlines, the 3D model, escaping and catalogue data. Every car in the database and catalogue goes through the app's maths, and the race model is checked against tested 0–60 times and top speeds. |
 | `tests/e2e.mjs` | 25 | Drives the real page in headless Chrome: search, filters, all three sources, race, configurator, mods, share links, saved line-ups, tampered storage, units, themes, phone layout, no console or CSP errors, and offline mode. |
 
 To check a running site the way the public reaches it (security headers, HTTPS, blocked attacks, speed, rate limiting):
@@ -444,7 +444,7 @@ car-compare/
 
 - **Cleaner database figures:** the importer now cross-checks power, weight, 0–60 and top speed against each other, fixing dropped digits, km/h stored as mph and pounds stored as kg, and dropping figures that can't be true. Run `python3 tools/build_db.py` again to pick this up.
 - **Whole-fleet tests:** every car in the database and catalogue goes through the app's maths, and the race model is checked against the published figures.
-- Tests grew to 53 Python, 30 Node and 25 browser steps.
+- Tests grew to 54 Python, 31 Node and 25 browser steps.
 
 **Known issues**
 

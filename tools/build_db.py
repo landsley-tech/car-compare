@@ -159,8 +159,8 @@ def cross_check(e, name=""):
         reach = 25.7 * e["hp"] ** (1 / 3)  # mph an ordinary body shape reaches on this power
         if e["top"] > 1.35 * reach:
             e["top"] = round(e["top"] / 1.609) if e["top"] / 1.609 <= 1.2 * reach else None  # km/h stored as mph
-        elif e["top"] < 0.45 * reach:
-            e["top"] = None
+        elif e["top"] < 0.45 * reach and e["top"] < 75:
+            e["top"] = None  # limiters sit at 100+ mph (a 1000 hp Hummer EV is limited to 106), so only drop the impossible
     return e
 
 
@@ -173,7 +173,7 @@ def fill_gaps(engines):
         if all(e[k] for k in DIMS) and e["kg"]:
             by_family.setdefault(family(e), []).append(e)
     for e in engines:
-        est = []
+        est = e.pop("_fixed", None) or []  # figures cross_check corrected count as estimates too
         sibs = by_model[e["model_id"]]
         if e["hp"] is None and (hp := first(r"\((\d+)\s*HP\)", e["name"], int)) and 5 <= hp <= 2100:
             e["hp"] = hp
@@ -253,10 +253,13 @@ def build(src, out):
         if not m or not e["id"].isdigit():
             continue
         try:
-            spec = cross_check(sane(parse_engine(json.loads(e["specs"]), e["name"])), e["name"])
+            raw = sane(parse_engine(json.loads(e["specs"]), e["name"]))
+            before = dict(raw)
+            spec = cross_check(raw, e["name"])
         except (ValueError, AttributeError, TypeError):
             continue
-        engines.append({"id": int(e["id"]), "model_id": m[0], "name": clean(e["name"]), **spec, "model_name": m[2], "model": m})
+        fixed = [k for k in ("hp", "kg", "top") if spec[k] is not None and spec[k] != before[k]]  # rewritten, so not as published
+        engines.append({"id": int(e["id"]), "model_id": m[0], "name": clean(e["name"]), **spec, "model_name": m[2], "model": m, "_fixed": fixed})
     fill_gaps(engines)
     for e in engines:
         e.pop("model")

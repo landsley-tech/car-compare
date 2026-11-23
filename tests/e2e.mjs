@@ -149,6 +149,7 @@ try {
     const e = document.getElementById('event'); e.value = 'brake'; e.dispatchEvent(new Event('change')); })()`);
   assert.match(await js(`document.getElementById('race-results').textContent`), /P1.*\d\d\.\d m in \d\.\d\d s/s);
   assert.equal(await js(`document.querySelectorAll('#strip .dnf').length`), 0, 'every car can brake');
+  assert.match(await js(`[...document.querySelectorAll('#strip .tag')].map(t => t.textContent).join('|')`), /\d\.\d m/, 'lane tags show metres too');
   assert.deepEqual(await js(`[...document.getElementById('event').options].map(o => o.value)`), ['z60', 'z100', 'qm', 'r3070', 'roll', 'brake', 'lap', 'hill']);
   await js(`(() => { const e = document.getElementById('event'); e.value = 'z100'; e.dispatchEvent(new Event('change')); })()`);
   assert.match(await js(`document.getElementById('strip').textContent`), /Can't reach 100 mph/);

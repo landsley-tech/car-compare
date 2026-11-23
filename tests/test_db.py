@@ -122,6 +122,7 @@ class BuilderTests(unittest.TestCase):
         self.assertEqual(fix(hp=245, kg=1670, z60=6.2, top=34)["top"], None)             # 5 Series "34 mph"
         self.assertEqual(fix(hp=105, kg=1190, z60=12, top=292)["top"], None)             # Bluebird "292 mph": not km/h either
         self.assertEqual(fix(hp=450, kg=1900, z60=4.4, top=155)["top"], 155)             # a limited 155 mph is real
+        self.assertEqual(fix(hp=1000, kg=4100, z60=3.0, top=106)["top"], 106)            # so is a 1000 hp Hummer EV's 106
         self.assertEqual(fix(kg=3968)["kg"], 1800)                                       # pounds stored as kg
         self.assertEqual(fix(kg=482, hp=150, z60=7.4)["kg"], None)                       # too light for its size: re-estimated later
         self.assertEqual(fix(kg=540, hp=135, z60=5.0, top=122, length=3100, width=1575, height=1090)["kg"], 540)  # a Caterham is light
@@ -169,6 +170,13 @@ class FillGapsTests(unittest.TestCase):
         self.assertEqual(e[3]["est"], "kg")
         self.assertEqual((e[4]["kg"], e[4]["length"], e[4]["est"]), (1300, 4300, "dims,kg"))
         self.assertEqual((e[5]["kg"], e[5]["est"]), (None, None))
+
+    def test_figures_cross_check_corrected_are_flagged(self):
+        es = [self.eng(1, 1, hp=180, kg=1300, dims=(4300, 1800, 1450, 2600))]
+        es[0]["_fixed"] = ["hp"]  # set by build() when cross_check rewrote the power
+        build_db.fill_gaps(es)
+        self.assertEqual(es[0]["est"], "hp")
+        self.assertNotIn("_fixed", es[0])  # never reaches the database insert
 
 
 class DbApiTests(unittest.TestCase):

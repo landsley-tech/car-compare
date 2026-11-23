@@ -42,6 +42,19 @@ test('race: known 0-60 is used in the dry', () => {
   assert.equal(raceTime(byId('bmw-m4-f82:m4'), 'z60', 'dry'), 3.9);
 });
 
+test('race: a slow car with a tested 0-60 stays anchored to it in every condition', () => {
+  // too weak for the dry model, but thinner air at altitude lets the model through: the result must not jump about
+  for (const hp of [24, 26, 28]) {
+    const car = { year: 1960, hp, kg: 650, z60: 30, asp: 'turbo', box: '4-Speed Manual', drive: 'RWD' };
+    assert.equal(raceTime(car, 'z60', 'dry'), 30);
+    for (const env of ['altitude', 'heat']) { // was 64 s and 48 s at altitude before the fix
+      const t = raceTime(car, 'z60', env);
+      assert.ok(t >= 24 && t <= 40, `${hp} hp ${env}: ${t}`);
+    }
+    for (const env of ['wet', 'snow']) assert.ok(raceTime(car, 'z60', env) >= 30, `${hp} hp ${env} quicker than dry`);
+  }
+});
+
 test('race: rain hurts RWD more than AWD', () => {
   const m4 = byId('bmw-m4-f82:m4'), s3 = byId('audi-a3-8y:s3');
   const pen = c => raceTime(c, 'qm', 'wet') / raceTime(c, 'qm', 'dry');

@@ -260,7 +260,7 @@ async function addSelected(load = () => SOURCES[src].load(sel)) {
 function loadCar(id) {
   if (/^db-\d{1,8}$/.test(id)) return api('db/car?' + qs({ id: id.slice(3) }));
   if (/^epa-\d{1,8}$/.test(id)) return api('epa/vehicle?' + qs({ id: id.slice(4) }));
-  return Promise.resolve().then(() => FEATURED.find(c => c.id === id)); // a rejection, not a throw, if the catalogue isn't loaded yet
+  return Promise.resolve(FEATURED.find(c => c.id === id));
 }
 
 // Share links look like #cars=db-3497~stage1.exhaust,epa-38623,bmw-m4-f82:m4  (~ starts a car's mods)
@@ -268,13 +268,16 @@ function saveHash() {
   const ids = picks.map(p => p.car.id + (p.mods.length ? '~' + p.mods.join('.') : '')).join(',');
   history.replaceState(null, '', ids ? '#cars=' + encodeURIComponent(ids) : location.pathname);
 }
+let restoreRun = 0;
 async function restoreHash() {
+  const run = ++restoreRun;
   const m = location.hash.match(/^#cars=([^&]{1,400})$/);
   if (!m) return;
   let ids;
   try { ids = decodeURIComponent(m[1]).split(',').slice(0, MAX_PICKS); } catch { return; } // malformed link: ignore it
   const items = ids.map(t => t.split('~'));
   const cars = await Promise.all(items.map(([id]) => loadCar(id).catch(() => null)));
+  if (run !== restoreRun) return; // another link was opened meanwhile
   cars.forEach((car, i) => addCar(car, (items[i][1] || '').split('.'))); // unknown mod names are dropped by modList
   setStatus();
   renderAll();
@@ -576,7 +579,7 @@ function renderRace() {
   $('strip').innerHTML = raceTimes().map(({ p, t }) => {
     const lane = t != null
       ? `<div class="car" id="car-${p.series}" style="--c:${col(p)}">${carArt(p.car, col(p))}<span class="tag" id="tag-${p.series}"></span></div>`
-      : `<span class="dnf">${p.car.hp && p.car.kg ? `Can't reach ${EVENTS[$('event').value].to ?? 100} mph` : 'No power or weight data'}</span>`;
+      : `<span class="dnf">${p.car.hp && p.car.kg ? (EVENTS[$('event').value].to ? `Can't reach ${EVENTS[$('event').value].to} mph` : "Can't finish") : 'No power or weight data'}</span>`;
     return `<div class="lane"><div class="lane-label" title="${esc(name(p.car))}">${esc(p.car.model)}<small>${esc(p.car.year ?? '')}</small></div>
       <div class="track">${lane}</div></div>`;
   }).join('');
@@ -596,12 +599,12 @@ function showResults(t) {
 }
 
 function place(t) {
-  const k = EVENTS[$('event').value].k;
+  const { k, metres } = EVENTS[$('event').value];
   raceTimes().forEach(({ p, t: rt }) => {
     if (rt == null) return;
     const progress = Math.min(1, (t / rt) ** k);
     $('car-' + p.series).style.setProperty('--p', progress);
-    $('tag-' + p.series).textContent = progress >= 1 ? secs(rt) : '';
+    $('tag-' + p.series).textContent = progress < 1 ? '' : metres ? metres(rt).toFixed(1) + ' m' : secs(rt);
   });
   $('clock').textContent = secs(t);
 }
@@ -834,7 +837,8 @@ $('share').addEventListener('click', async () => {
 });
 // A share link pasted into an open tab only changes the hash. saveHash uses replaceState, which never fires this.
 // a link opened while the app is still starting waits for the catalogue and database list, instead of being dropped
-addEventListener('hashchange', () => started.then(() => { picks = []; replacing = null; return restoreHash(); }));
+// a newer link wins over one still loading, and a failed start never blocks later links
+addEventListener('hashchange', () => started.catch(() => {}).then(() => { picks = []; replacing = null; return restoreHash(); }));
 
 $('event').innerHTML = Object.entries(EVENTS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
 $('env').innerHTML = Object.entries(ENVS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');

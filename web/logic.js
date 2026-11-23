@@ -113,8 +113,10 @@ function accel(car, env, from = 0, to = Infinity, dist = Infinity) {
     const push = coast > 0 ? 0 : Math.min(tyres, P / Math.max(v, vLow)), a = (push - k * v * v - r) / m;
     if ((coast <= 0 && a <= 0.02) || t > 150) return null; // run out of power before getting there
     coast -= dt;
-    const nv = Math.max(0, v + a * dt), step = nv > end ? (end - v) / (nv - v) : 1; // finish part-way through the last step
-    x += (v + nv) / 2 * dt * step; t += dt * step; v = nv;
+    const nv = Math.max(0, v + a * dt), dx = (v + nv) / 2 * dt;
+    // finish part-way through the last step, at the target speed or the target distance, whichever comes first
+    const step = Math.min(nv > end ? (end - v) / (nv - v) : 1, x + dx > dist ? (dist - x) / dx : 1);
+    x += dx * step; t += dt * step; v = nv;
     if (gear >= 0 && gear < SHIFT_AT.length && v < end && v >= SHIFT_AT[gear]) { coast = shift; gear++; }
   }
   return t;
@@ -145,6 +147,8 @@ export function raceTime(car, ev, env) {
   if (t == null) return tested ? car.z60 * c.base / c.mu ** 0.3 * (car.launchK ?? 1) : null; // too weak for the model: scale the tested time
   const chassis = e.from ? 1 : car.launchK ?? 1; // tyres only help off the line
   const model = car.z60 ? accel(car, 'dry', 0, 60) : null;
+  // tested, but too weak for the dry model (thin air can still let it through): scale the tested time, as above
+  if (car.z60 && !model) return ev === 'z60' ? car.z60 * c.base / c.mu ** 0.3 * chassis : t * chassis;
   if (!model) return t * chassis;
   // a tested 0-60 time anchors the model. the 0-60 race shows it exactly in the dry and moves it by the model's wet / snow /
   // altitude effect otherwise. the other events are corrected by how far out the model was, in proportion to how much of the
@@ -438,7 +442,7 @@ export function sideDetail(car) {
   const R = Math.round, line = (cls, [x1, y1], [x2, y2]) => ({ tag: 'line', class: cls, x1: R(x1), y1: R(y1), x2: R(x2), y2: R(y2) });
   const belt = Math.min(b2[1], b5[1]) - .02, sill = .27; // door tops and bottoms, as fractions of the height
   const shapes = [
-    { tag: 'ellipse', class: 'shadow', cx: R(L / 2), cy: R(H), rx: R(L * .54), ry: R(H * .05) },
+    { tag: 'ellipse', class: 'shadow', cx: R(L / 2), cy: R(H), rx: R(L * .5), ry: R(H * .05) },
     { tag: 'path', class: 'body', d: roundedPath(prof.map(P), radiiOf(body).map(k => k * H)) },
     // a darker band along the bottom and a crease along the flank give the body some shape
     { tag: 'rect', class: 'sill', x: R(front + r), y: R(H - sill * H), width: R(Math.max(1, WB - 2 * r)), height: R(H * .06), rx: R(H * .02) },
