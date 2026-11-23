@@ -11,7 +11,7 @@ Pick a car for its full spec sheet, or line up two to six and see them against e
 ![Versions](https://img.shields.io/badge/versions-29%2C971-d92d2d?style=flat-square)
 ![Brands](https://img.shields.io/badge/brands-122-d92d2d?style=flat-square)
 ![Years](https://img.shields.io/badge/years-1899%E2%80%932026-4f5a6b?style=flat-square)
-![Tests](https://img.shields.io/badge/tests-110%20passing-2b8c62?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-112%20passing-2b8c62?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3b6fd8?style=flat-square)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-2b8c62?style=flat-square)
 ![Licence](https://img.shields.io/badge/licence-MIT-4f5a6b?style=flat-square)
@@ -38,7 +38,7 @@ Spec sheets are scattered across a hundred sites, each in its own units, and non
 | 🏁 **Race them** | Eight events in five conditions, run as an animated race. The 911 wins in the dry; see what happens in the snow. |
 | 🔧 **Modify them** | Remaps and parts change the power, the 0–60, the race and even the drawings, with a rough cost. |
 | 💷 **What it costs to own** | UK car tax, fuel a year from your own mileage and prices, and a ULEZ check. |
-| 🪟 **A liquid glass interface** | Frosted glass panels over a soft colour field, in light and dark, on a phone or a big screen. Cars without a photo get a proper drawing, not a block. |
+| 🪟 **A liquid glass interface** | Frosted glass panels over a soft colour field, in light and dark, on a phone or a big screen, with smooth transitions that switch off if you prefer reduced motion. Cars without a photo get a proper drawing, not a block. |
 | 🔒 **Self-hosted and hardened** | One Python file, no packages, rate limits, a read-only database and a strict CSP. Runs on a home server. |
 
 <br>
@@ -103,6 +103,16 @@ Light and dark themes, and hp/mph/mpg or kW/km/h/L per 100 km. Both are remember
 <tr>
 <td colspan="2" valign="top">
 
+### Smooth, considerate motion
+The page eases in on load, each section rises into view as you scroll, new cars pop into the line-up, chart bars glide to their new length when you change a mod or your mileage, and the theme cross-fades. Turn on *Reduce motion* in your system settings and all of it switches off.
+
+<p align="center"><img src="docs/motion.gif" alt="The page loading with the line-up easing in, then scrolling down as the overview and dimensions sections rise into view" width="85%"></p>
+
+</td>
+</tr>
+<tr>
+<td colspan="2" valign="top">
+
 ### The full spec sheet, best in green
 Performance, engine, running costs, size, practicality and your chosen options, grouped and side by side. The best figure in each row is green, and anything the importer estimated is marked **≈**.
 
@@ -144,6 +154,7 @@ Performance, engine, running costs, size, practicality and your chosen options, 
 
 **App**
 - A **liquid glass** look: frosted panels, a floating app bar and glossy controls, with solid fallbacks for browsers without blur and for anyone who turns on *Reduce transparency*
+- **Transitions:** the page eases in, sections rise into view as you scroll, new line-up cards pop in, chart bars glide to new values and the theme cross-fades. Everything respects *Reduce motion*
 - **Drawn cars** wherever there's no photo, in the race lanes and next to the person: smooth bodies, wheel wells, five-spoke wheels, door lines and mirrors, in each car's paint
 - Light and dark theme, UK or metric units, remembered per browser
 - **Installable** in Chrome or Edge (or "Add to Home Screen" on a phone); the app shell and Featured cars work offline
@@ -315,25 +326,26 @@ flowchart LR
 | **XSS and clickjacking** | Every piece of data is HTML-escaped. A strict Content-Security-Policy (scripts from this site only), `nosniff`, no framing and no referrer. |
 | **Tampered links and storage** | Mod names in a share link are checked against the built-in list. Saved line-ups, fuel prices and space sizes from browser storage are validated, and anything tampered with falls back to the defaults. |
 | **A hostile dataset** | The download is treated as untrusted: HTML stripped, impossible numbers dropped, only autoevolution CDN photo URLs kept (no `javascript:`), and the zip read by fixed names (no zip-slip). |
+| **Styles and motion** | The stylesheet loads nothing from outside (fonts aside): no `@import`, and its only `url()`s are inline SVG icons. Animations are plain CSS plus a few classes the app's own script toggles, so the CSP stays as strict as before. A test fails the build if that changes. |
 | **Leaky errors** | Only GET and HEAD are accepted, and upstream error details are never sent to the browser. |
 
 <br>
 
 ## ✦ Tests
 
-**110 tests**, plus a checker for a live site.
+**112 tests**, plus a checker for a live site.
 
 ```bash
 python3 -m unittest discover tests     # server, database importer + security/attack tests (54)
-node --test                            # tax, race model, mods, costs, outlines, 3D model, escaping, catalogue, whole-fleet checks (31)
-node tests/e2e.mjs                     # 25 steps driving the real page in headless Chrome (add EPA=1 for the live EPA test)
+node --test                            # tax, race model, mods, costs, outlines, 3D model, escaping, catalogue, whole-fleet checks, stylesheet security (32)
+node tests/e2e.mjs                     # 26 steps driving the real page in headless Chrome (add EPA=1 for the live EPA test)
 ```
 
 | Suite | Count | What it proves |
 |---|:---:|---|
 | `tests/test_*.py` | 54 | The server, security headers, rate limits, connection caps, the EPA proxy and the importer. **Attacks:** path traversal, SQL injection, floods, slowloris, oversized and malformed requests, spoofed forwarding headers behind Cloudflare and Caddy, hostile dataset rows and zip-slip. |
-| `tests/*.test.mjs` | 31 | UK tax, the race model, mods, running costs, outlines, the 3D model, escaping and catalogue data. Every car in the database and catalogue goes through the app's maths, and the race model is checked against tested 0–60 times and top speeds. |
-| `tests/e2e.mjs` | 25 | Drives the real page in headless Chrome: search, filters, all three sources, race, configurator, mods, share links, saved line-ups, tampered storage, units, themes, phone layout, no console or CSP errors, and offline mode. |
+| `tests/*.test.mjs` | 32 | UK tax, the race model, mods, running costs, outlines, the 3D model, escaping and catalogue data. Every car in the database and catalogue goes through the app's maths, and the race model is checked against tested 0–60 times and top speeds. The stylesheet is checked for outside resources, script tricks and motion outside the reduced-motion guard. |
+| `tests/e2e.mjs` | 26 | Drives the real page in headless Chrome: search, filters, all three sources, race, configurator, mods, share links, saved line-ups, tampered storage, units, themes, phone layout, transitions and reduced motion, no console or CSP errors, and offline mode. |
 
 To check a running site the way the public reaches it (security headers, HTTPS, blocked attacks, speed, rate limiting):
 
@@ -436,6 +448,7 @@ car-compare/
 
 - **Liquid glass redesign:** frosted glass panels over a soft colour field, a floating app bar, a segmented source switcher, pill buttons, glossy paint swatches and glowing chart bars. It falls back to solid panels where blur isn't supported or *Reduce transparency* is on.
 - **Proper car drawings:** cars without a photo, the race lanes and the side-on drawings now use smooth curved bodies with wheel wells, five-spoke wheels, brake discs, door lines, handles and mirrors, instead of flat blocks.
+- **Transitions:** the page eases in on load, sections rise into view as you scroll, new cars pop into the line-up, chart bars glide from their old length to the new one, and switching theme cross-fades. All pure CSS plus a few classes, and all of it is off when *Reduce motion* is on.
 - **Better 3D models:** curved body lines, a body that rolls in at the shoulder and sill, a glasshouse that narrows towards the roof, glossy highlights and a soft shadow.
 - **More race events:** 0–100 mph, 30–70 mph (rolling) and braking from 60 mph, judged in metres.
 - **A physics race model:** each run is simulated step by step (grip, power, air and rolling drag, gear changes), fitted to the tested 0–60 times and top speeds in the database, with tyre grip by era.
@@ -444,7 +457,7 @@ car-compare/
 
 - **Cleaner database figures:** the importer now cross-checks power, weight, 0–60 and top speed against each other, fixing dropped digits, km/h stored as mph and pounds stored as kg, and dropping figures that can't be true. Run `python3 tools/build_db.py` again to pick this up.
 - **Whole-fleet tests:** every car in the database and catalogue goes through the app's maths, and the race model is checked against the published figures.
-- Tests grew to 54 Python, 31 Node and 25 browser steps.
+- Tests grew to 54 Python, 32 Node and 26 browser steps.
 
 **Known issues**
 

@@ -373,6 +373,29 @@ try {
   await shot('new-desktop.png', 1280, 900);
   step('new sections fit a phone screen');
 
+  // motion: only new cards animate in, bars land on their real length, the theme cross-fade tidies up, reduced motion stops it all
+  await cdp('Page.navigate', { url: 'about:blank' });
+  await cdp('Page.navigate', { url: BASE + '#cars=' + encodeURIComponent('mini-mk1:850,vw-beetle-54:1200') });
+  await waitFor(`document.querySelectorAll('.slot:not(.add)').length === 2`);
+  assert.equal(await js(`document.querySelectorAll('.slot.enter').length`), 2, 'new cards animate in');
+  assert.equal(await js(`getComputedStyle(document.querySelector('.slot.enter')).animationName`), 'pop');
+  await js(`document.getElementById('units').click()`); // re-renders everything
+  assert.equal(await js(`document.querySelectorAll('.slot.enter').length`), 0, 'cards already showing animated again');
+  await js(`document.getElementById('units').click()`);
+  await sleep(900);
+  assert.ok(await js(`(() => { const b = [...document.querySelectorAll('.bar i')];
+    return b.length > 0 && b.every(i => i.style.getPropertyValue('--w') === i.dataset.w && /^\\d+(\\.\\d)?%$/.test(i.dataset.w)); })()`), 'bars end at their real length');
+  await js(`document.getElementById('theme').click()`);
+  assert.equal(await js(`document.documentElement.classList.contains('theming')`), true);
+  await waitFor(`!document.documentElement.classList.contains('theming')`, 2000);
+  await js(`document.getElementById('theme').click()`);
+  await cdp('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
+  assert.deepEqual(await js(`['.slot', '#finder', '.appbar-inner', '#overview'].map(s => getComputedStyle(document.querySelector(s)).animationName)`),
+    ['none', 'none', 'none', 'none'], 'reduced motion: no animations');
+  assert.equal(await js(`getComputedStyle(document.querySelector('.bar i')).transitionDuration`), '0s', 'reduced motion: bars jump');
+  await cdp('Emulation.setEmulatedMedia', { features: [] });
+  step('motion: new cards pop in once, bars glide to their real length, theme cross-fades, reduced motion turns it all off');
+
   const problems = events.filter(e => e.method === 'Runtime.exceptionThrown' ||
     (e.method === 'Log.entryAdded' && e.params.entry.level === 'error' && !(e.params.entry.source === 'network' && /fonts\.g|autoevolution/.test(e.params.entry.url || ''))) ||
     (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error'));

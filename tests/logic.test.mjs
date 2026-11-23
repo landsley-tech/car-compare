@@ -310,3 +310,23 @@ test('physics: traction, thin air and drag pull the right way', () => {
   assert.ok(raceTime({ ...car, drive: 'RWD', box: '8-Speed Automatic' }, 'z100', 'dry') < t('RWD', 'dry', 'z100')); // quicker shifts
   assert.equal(raceTime({ ...car, drive: 'RWD', hp: 8, kg: 2500 }, 'z100', 'dry'), null);  // 8 hp in 2.5 tonnes never gets to 100
 });
+
+/* ---------- stylesheet: secure, and motion only for people who want it ---------- */
+test('style.css loads nothing from outside and keeps every movement behind prefers-reduced-motion', async () => {
+  const { readFileSync } = await import('node:fs');
+  const css = readFileSync(new URL('../web/style.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.doesNotMatch(css, /@import/i, 'no @import');
+  assert.doesNotMatch(css, /javascript:|expression\s*\(|(?<![-\w])behavior\s*:|-moz-binding/i, 'no script in CSS');
+  for (const [, u] of css.matchAll(/url\(\s*["']?([^"')]+)/g)) assert.match(u, /^data:image\/svg\+xml,/, 'only inline SVG images: ' + u.slice(0, 40));
+  // cut out every "@media (prefers-reduced-motion: no-preference) { ... }" block (matching braces), then check what's left
+  let rest = css;
+  for (let i; (i = rest.search(/@media\s*\(prefers-reduced-motion:\s*no-preference\)/)) >= 0;) {
+    let depth = 0, j = rest.indexOf('{', i);
+    for (; j < rest.length; j++) { if (rest[j] === '{') depth++; else if (rest[j] === '}' && --depth === 0) break; }
+    rest = rest.slice(0, i) + rest.slice(j + 1);
+  }
+  assert.doesNotMatch(rest, /(^|[;{\s])animation(-name)?\s*:/, 'an animation runs even with reduced motion');
+  for (const [t] of rest.matchAll(/transition\s*:[^;}]*/g)) assert.doesNotMatch(t, /transform|translate|scale|rotate|width|all\b/, 'movement outside the guard: ' + t);
+  assert.ok(/@media \(prefers-reduced-motion: no-preference\) \{\n  :root \{ --ease/.test(css), 'motion section present');
+});
+
