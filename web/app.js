@@ -35,8 +35,13 @@ function setTheme(t) {
   $('theme').setAttribute('aria-label', `Switch to ${t === 'dark' ? 'light' : 'dark'} theme`);
 }
 setTheme(store.get('theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+let theming = 0;
 $('theme').addEventListener('click', () => {
   const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+  // colours cross-fade while this class is on (style.css, motion section); the theme itself changes straight away
+  document.documentElement.classList.add('theming');
+  clearTimeout(theming);
+  theming = setTimeout(() => document.documentElement.classList.remove('theming'), 500);
   setTheme(t);
   store.set('theme', t);
 });
@@ -300,8 +305,10 @@ function carArt(car, paintColour) {
 }
 
 /* ---------- tray ---------- */
+let onTray = new Set(); // cards already showing, so a re-render doesn't animate them again
 function renderTray() {
-  const slots = picks.map(p => `<article class="slot" style="--c:${col(p)}">
+  const key = p => p.series + ':' + p.car.id;
+  const slots = picks.map(p => `<article class="slot${onTray.has(key(p)) ? '' : ' enter'}" style="--c:${col(p)}">
     <div class="photo">${p.car.image
       ? `<img src="${esc(p.car.image)}" alt="${esc(name(p.car))}" loading="lazy" referrerpolicy="no-referrer" width="320" height="180">`
       : carArt(p.car, paint(p))}</div>
@@ -318,6 +325,7 @@ function renderTray() {
   </article>`);
   if (picks.length < MAX_PICKS) slots.push(`<button class="slot add" type="button" id="add-slot">+ Add a car</button>`);
   $('tray').innerHTML = slots.join('');
+  onTray = new Set(picks.map(key));
   // a broken or blocked photo falls back to the drawing
   $('tray').querySelectorAll('img').forEach(img => img.addEventListener('error', () => {
     const p = picks.find(x => x.car.image === img.getAttribute('src'));
@@ -382,6 +390,8 @@ const METRICS = [
 ];
 
 function renderMetrics() {
+  // remember each bar's width so the new bars can glide from it (style.css transitions --w; reduced motion jumps)
+  const was = new Map([...$('metrics').querySelectorAll('.bar i')].map(i => [i.dataset.k, i.style.getPropertyValue('--w')]));
   $('metrics').innerHTML = METRICS.filter(m => picks.some(p => m.get(p.car, p) != null)).map(m => {
     const vals = picks.map(p => m.get(p.car, p)).filter(v => v != null);
     const max = Math.max(...vals);
@@ -391,13 +401,17 @@ function renderMetrics() {
       const text = v == null ? DASH : approx(p.car, m.key, m.money ? gbp(v) : m.u ? inUnits(m.u, v) : fmt(v, m.unit, m.dp));
       const isBest = v != null && vals.length > 1 && v === best;
       return `<div class="bar-row" style="--c:${col(p)}"><span title="${esc(name(p.car))}">${esc(p.car.model)}</span>
-        <span class="bar">${v == null ? '' : `<i style="--w:${(v / max * 100).toFixed(1)}%"></i>`}</span>
+        <span class="bar">${v == null ? '' : `<i data-k="${esc(m.title + p.series)}" data-w="${(v / max * 100).toFixed(1)}%"></i>`}</span>
         <span class="v ${isBest ? 'best' : ''}">${text}</span></div>`;
     }).join('');
     const hint = m.best === 'min' ? ' <span class="muted small">lower is better</span>'
       : m.u === 'econ' && metric ? ' <span class="muted small">longer bar uses less fuel</span>' : '';
     return `<div class="metric"><h3>${m.title}${hint}</h3>${rows}</div>`;
   }).join('');
+  const bars = [...$('metrics').querySelectorAll('.bar i')];
+  bars.forEach(i => i.style.setProperty('--w', was.get(i.dataset.k) || '0%'));
+  void $('metrics').offsetWidth; // commit the starting widths so the change below transitions
+  bars.forEach(i => i.style.setProperty('--w', i.dataset.w));
 }
 
 /* ---------- dimensions ---------- */
