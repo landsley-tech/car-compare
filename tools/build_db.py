@@ -10,6 +10,7 @@ The downloaded files are untrusted: every field is parsed into plain numbers or 
 and only autoevolution CDN photo URLs are kept.
 """
 import argparse
+import math
 import csv
 import html
 import json
@@ -128,6 +129,41 @@ DIMS = ("length", "width", "height", "wheelbase")
 KG_PER_M3 = 118  # median kerb weight per cubic metre of length x width x height across the dataset (IQR 109-129)
 
 
+def cross_check(e, name=""):
+    """Figures that pass sane() one by one can still contradict each other. Fix the ones with a clear cause, drop the rest.
+
+    Found by running every car through the app's physics (tests/fleet.test.mjs): e.g. a 180 HP Audi stored as 18 hp,
+    a 5 Series with a 34 mph top speed, a 90 hp people carrier doing 0-60 in 1.9 s.
+    """
+    if e["kg"] and all(e[k] for k in ("length", "width", "height")):
+        ratio = e["kg"] / (KG_PER_M3 * e["length"] * e["width"] * e["height"] / 1e9)  # 1.0 = typical weight for its size
+        if ratio > 1.9 and 0.7 <= ratio / 2.2046 <= 1.4:
+            e["kg"] = round(e["kg"] / 2.2046)  # pounds stored as kg (a 4,103 "kg" VW Atlas)
+        elif ratio < 0.45:
+            e["kg"] = None  # e.g. a 482 kg Dodge Neon; fill_gaps estimates it instead
+    rough60 = lambda hp: max(2.0, 1.05 * (e["kg"] / hp) ** 0.95)  # 0-60 from power-to-weight; tyres can't do much under 2 s
+    off = lambda hp: abs(math.log(e["z60"] / rough60(hp)))
+    named = first(r"\((\d{2,4})\s*HP\)", name, int)
+    if named and e["hp"] and 5 <= named <= 2100 and not 0.8 <= e["hp"] / named <= 1.25:
+        # the name and the parsed figure disagree (a dropped or doubled digit, or only the engine of a hybrid):
+        # keep whichever fits the tested 0-60, or failing that whichever is a believable power for the engine size
+        per_litre = lambda hp: 15 <= hp / (e["cc"] / 1000) <= 300
+        if e["kg"] and e["z60"]:
+            if off(named) < off(e["hp"]):
+                e["hp"] = named
+        elif e.get("cc") and per_litre(named) and not per_litre(e["hp"]):
+            e["hp"] = named
+    if e["hp"] and e["kg"] and e["z60"] and off(e["hp"]) > math.log(2.2):
+        e["z60"] = None
+    if e["hp"] and e["top"]:
+        reach = 25.7 * e["hp"] ** (1 / 3)  # mph an ordinary body shape reaches on this power
+        if e["top"] > 1.35 * reach:
+            e["top"] = round(e["top"] / 1.609) if e["top"] / 1.609 <= 1.2 * reach else None  # km/h stored as mph
+        elif e["top"] < 0.45 * reach and e["top"] < 75:
+            e["top"] = None  # limiters sit at 100+ mph (a 1000 hp Hummer EV is limited to 106), so only drop the impossible
+    return e
+
+
 def fill_gaps(engines):
     """Fill missing race data so more cars can be compared; every filled field is listed in "est"."""
     by_model, by_family = {}, {}
@@ -137,7 +173,7 @@ def fill_gaps(engines):
         if all(e[k] for k in DIMS) and e["kg"]:
             by_family.setdefault(family(e), []).append(e)
     for e in engines:
-        est = []
+        est = e.pop("_fixed", None) or []  # figures cross_check corrected count as estimates too
         sibs = by_model[e["model_id"]]
         if e["hp"] is None and (hp := first(r"\((\d+)\s*HP\)", e["name"], int)) and 5 <= hp <= 2100:
             e["hp"] = hp
@@ -217,10 +253,13 @@ def build(src, out):
         if not m or not e["id"].isdigit():
             continue
         try:
-            spec = sane(parse_engine(json.loads(e["specs"]), e["name"]))
+            raw = sane(parse_engine(json.loads(e["specs"]), e["name"]))
+            before = dict(raw)
+            spec = cross_check(raw, e["name"])
         except (ValueError, AttributeError, TypeError):
             continue
-        engines.append({"id": int(e["id"]), "model_id": m[0], "name": clean(e["name"]), **spec, "model_name": m[2], "model": m})
+        fixed = [k for k in ("hp", "kg", "top") if spec[k] is not None and spec[k] != before[k]]  # rewritten, so not as published
+        engines.append({"id": int(e["id"]), "model_id": m[0], "name": clean(e["name"]), **spec, "model_name": m[2], "model": m, "_fixed": fixed})
     fill_gaps(engines)
     for e in engines:
         e.pop("model")

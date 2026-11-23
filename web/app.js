@@ -1,7 +1,7 @@
 // Car Compare. Copyright (c) 2026 Landsley Bowerman. MIT licence, see LICENSE.
 // Designed by Landsley Bowerman; code written by Claude (Anthropic) from Landsley's prompts.
 // SPDX-License-Identifier: MIT
-import { esc, ukTax, raceTime, EVENTS, ENVS, outline, iconOutline, eraColours, flatten, unique, configPrice,
+import { esc, ukTax, raceTime, EVENTS, ENVS, outline, eraColours, flatten, unique, configPrice,
   carMesh, sideDetail, sized, PERSON, GARAGE_DOOR, MODS, modsFor, modList, applyMods, yearlyCost, COST_DEFAULTS, ulez, fits } from './logic.js';
 
 const $ = id => document.getElementById(id);
@@ -268,13 +268,16 @@ function saveHash() {
   const ids = picks.map(p => p.car.id + (p.mods.length ? '~' + p.mods.join('.') : '')).join(',');
   history.replaceState(null, '', ids ? '#cars=' + encodeURIComponent(ids) : location.pathname);
 }
+let restoreRun = 0;
 async function restoreHash() {
+  const run = ++restoreRun;
   const m = location.hash.match(/^#cars=([^&]{1,400})$/);
   if (!m) return;
   let ids;
   try { ids = decodeURIComponent(m[1]).split(',').slice(0, MAX_PICKS); } catch { return; } // malformed link: ignore it
   const items = ids.map(t => t.split('~'));
   const cars = await Promise.all(items.map(([id]) => loadCar(id).catch(() => null)));
+  if (run !== restoreRun) return; // another link was opened meanwhile
   cars.forEach((car, i) => addCar(car, (items[i][1] || '').split('.'))); // unknown mod names are dropped by modList
   setStatus();
   renderAll();
@@ -289,12 +292,11 @@ const price = p => p.car.price ? configPrice(p.car, p.colour, p.addons) : null;
 const yearsText = c => c.years ? yearSpan(...c.years) : c.year;
 const svgShape = s => `<${s.tag} ${Object.entries(s).filter(([k]) => k !== 'tag').map(([k, v]) => `${k}="${esc(v)}"`).join(' ')}/>`;
 
-// Side silhouette from the same outline geometry as the dimension drawings (faces left).
-function silhouette(car) {
-  const o = iconOutline(car);
-  const body = svgShape({ ...o.shapes[0], fill: 'currentColor' });
-  const wheels = o.shapes.slice(1).map(w => svgShape({ ...w, fill: '#111' })).join('');
-  return `<svg viewBox="0 0 ${o.w} ${o.h}" aria-hidden="true">${body}${wheels}</svg>`;
+// Detailed side-on drawing (faces left) in a given paint, for cards without a photo and the race lanes.
+// The paint is a validated #hex from the colour list or one of our own var(--sN) names, and is escaped anyway.
+function carArt(car, paintColour) {
+  const o = sideDetail(car), pad = Math.round(o.h * 0.08);
+  return `<svg class="art" viewBox="${-pad} ${-pad} ${o.w + pad * 2} ${o.h + pad * 2}" aria-hidden="true" style="--paint:${esc(paintColour)}">${o.shapes.map(svgShape).join('')}</svg>`;
 }
 
 /* ---------- tray ---------- */
@@ -302,7 +304,7 @@ function renderTray() {
   const slots = picks.map(p => `<article class="slot" style="--c:${col(p)}">
     <div class="photo">${p.car.image
       ? `<img src="${esc(p.car.image)}" alt="${esc(name(p.car))}" loading="lazy" referrerpolicy="no-referrer" width="320" height="180">`
-      : silhouette(p.car)}</div>
+      : carArt(p.car, paint(p))}</div>
     <div class="meta">
       <span class="make">${esc(p.car.make)}</span>
       <span class="model">${esc(p.car.model)}</span>
@@ -316,10 +318,10 @@ function renderTray() {
   </article>`);
   if (picks.length < MAX_PICKS) slots.push(`<button class="slot add" type="button" id="add-slot">+ Add a car</button>`);
   $('tray').innerHTML = slots.join('');
-  // a broken or blocked photo falls back to the silhouette
+  // a broken or blocked photo falls back to the drawing
   $('tray').querySelectorAll('img').forEach(img => img.addEventListener('error', () => {
     const p = picks.find(x => x.car.image === img.getAttribute('src'));
-    if (p) img.parentElement.innerHTML = silhouette(p.car);
+    if (p) img.parentElement.innerHTML = carArt(p.car, paint(p));
   }, { once: true }));
   // fill each card's version dropdown once its list arrives (cached, so re-renders are instant)
   for (const p of picks) siblings(p.car).then(list => {
@@ -469,14 +471,17 @@ function renderLooks() {
   $('profiles').innerHTML = cars.map(({ p, o }) => `<figure class="profile">
     <svg viewBox="${-pad} ${-pad} ${W + pad * 2} ${H + pad * 2}" role="img" aria-label="${esc(name(p.car))} side on, next to a 1.75 m person">
       <line class="ground" x1="${-pad}" y1="${H}" x2="${W + pad}" y2="${H}"/>${person}
-      <g transform="translate(${PERSON.w + gap} ${H - o.h})" style="--paint:${esc(paint(p))}">${o.shapes.map(svgShape).join('')}</g></svg>
+      <g class="art" transform="translate(${PERSON.w + gap} ${H - o.h})" style="--paint:${esc(paint(p))}">${o.shapes.map(svgShape).join('')}</g></svg>
     <figcaption><span class="dot" style="--c:${col(p)}"></span>${esc(name(p.car))} <span class="muted small">${esc(p.car.trim)} · ${esc(p.colour)}</span></figcaption></figure>`).join('');
 }
 
 // A tiny painter's-algorithm renderer: cull faces pointing away, sort the rest back to front, shade by one light.
 let meshes = {}, reach = 1, yaw = -0.6, spinning = !matchMedia('(prefers-reduced-motion: reduce)').matches, spinRaf = 0;
 const PITCH = 0.32, LIGHT = [-0.35, 0.8, 0.5].map(v => v / Math.hypot(-0.35, 0.8, 0.5));
-const FIXED = { glass: '#1d2833', tyre: '#151515', rim: '#a9afb5', light: '#f4f1dc', tail: '#b3121b' };
+const FIXED = { glass: '#1d2833', tyre: '#151515', rim: '#b9bfc5', light: '#f4f1dc', tail: '#b3121b' };
+// Blinn-Phong highlight: half-way between the light and the viewer (who looks down -z, so faces we see have z > 0)
+const HALF = (h => h.map(v => v / Math.hypot(...h)))([LIGHT[0], LIGHT[1], LIGHT[2] + 1]);
+const GLOSS = { paint: [0.55, 28], glass: [0.85, 60], rim: [0.45, 16], light: [0.3, 10], tail: [0.3, 10] };
 const rgb = hex => /^#[0-9a-f]{6}$/i.test(hex) ? [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)) : [136, 136, 136];
 
 function draw3d() {
@@ -503,12 +508,18 @@ function draw3d() {
       v.forEach((a, i) => { const b = v[(i + 1) % v.length]; nx += (a[1] - b[1]) * (a[2] + b[2]); ny += (a[2] - b[2]) * (a[0] + b[0]); nz += (a[0] - b[0]) * (a[1] + b[1]); });
       if (nz <= 0) continue;
       const n = Math.hypot(nx, ny, nz), lit = 0.42 + 0.58 * Math.max(0, (nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2]) / n);
+      const [gk, ge] = GLOSS[f.kind] || [0, 1], spec = gk * Math.max(0, (nx * HALF[0] + ny * HALF[1] + nz * HALF[2]) / n) ** ge;
       const base = f.kind === 'paint' ? paintRgb : rgb(FIXED[f.kind]);
-      drawn.push({ v, depth: v.reduce((t, a) => t + a[2], 0) / v.length, fill: `rgb(${base.map(c => Math.round(c * lit)).join(' ')})` });
+      drawn.push({ v, depth: v.reduce((t, a) => t + a[2], 0) / v.length,
+        fill: `rgb(${base.map(c => Math.min(255, Math.round(c * lit + 255 * spec))).join(' ')})` });
     }
-    // shadow on the ground first, then faces from the back forwards
-    const W2 = sized(p.car).dims.width / 2 + 60;
-    ctx.fillStyle = 'rgb(0 0 0 / .16)';
+    // soft shadow on the ground first, then faces from the back forwards
+    const W2 = sized(p.car).dims.width / 2 + 60, [gx, gy] = view([L / 2, 0, 0]), gr = L * 0.62 * s;
+    const soft = ctx.createRadialGradient(0, 0, 0, 0, 0, gr);
+    soft.addColorStop(0, 'rgb(0 0 0 / .28)'); soft.addColorStop(1, 'rgb(0 0 0 / 0)');
+    ctx.save(); ctx.translate(w / 2 + gx * s, cy - gy * s); ctx.scale(1, 0.32);
+    ctx.fillStyle = soft; ctx.beginPath(); ctx.arc(0, 0, gr, 0, 2 * Math.PI); ctx.fill(); ctx.restore();
+    ctx.fillStyle = 'rgb(0 0 0 / .14)';
     ctx.beginPath();
     [[-60, 0, W2], [L + 60, 0, W2], [L + 60, 0, -W2], [-60, 0, -W2]].map(view).forEach(([x, y], i) => ctx[i ? 'lineTo' : 'moveTo'](w / 2 + x * s, cy - y * s));
     ctx.fill();
@@ -567,8 +578,8 @@ function renderRace() {
   $('race-note').textContent = `${ev.note}. ${ENVS[env].note}.`;
   $('strip').innerHTML = raceTimes().map(({ p, t }) => {
     const lane = t != null
-      ? `<div class="car" id="car-${p.series}" style="--c:${col(p)}">${silhouette(p.car)}<span class="tag" id="tag-${p.series}"></span></div>`
-      : `<span class="dnf">${p.car.hp && p.car.kg ? "Can't reach 100 mph" : 'No power or weight data'}</span>`;
+      ? `<div class="car" id="car-${p.series}" style="--c:${col(p)}">${carArt(p.car, col(p))}<span class="tag" id="tag-${p.series}"></span></div>`
+      : `<span class="dnf">${p.car.hp && p.car.kg ? (EVENTS[$('event').value].to ? `Can't reach ${EVENTS[$('event').value].to} mph` : "Can't finish") : 'No power or weight data'}</span>`;
     return `<div class="lane"><div class="lane-label" title="${esc(name(p.car))}">${esc(p.car.model)}<small>${esc(p.car.year ?? '')}</small></div>
       <div class="track">${lane}</div></div>`;
   }).join('');
@@ -579,20 +590,21 @@ function showResults(t) {
   const done = raceTimes().filter(x => x.t != null).sort((a, b) => a.t - b.t), best = done[0]?.t;
   $('race-results').innerHTML = done.map(({ p, t: rt }, i) => {
     const finished = rt <= t;
-    const gap = !finished ? '' : i ? `+${(rt - best).toFixed(2)} s` : done.length > 1 ? 'Winner' : 'Solo run';
+    const dist = EVENTS[$('event').value].metres; // braking is judged on stopping distance
+    const gap = !finished ? '' : i ? (dist ? `+${(dist(rt) - dist(best)).toFixed(1)} m` : `+${(rt - best).toFixed(2)} s`) : done.length > 1 ? 'Winner' : 'Solo run';
     return `<div class="res ${finished ? '' : 'pending'}" style="--c:${col(p)}">
       <div class="pos">P${i + 1}</div><div class="name">${esc(p.car.model)}</div>
-      <div>${finished ? secs(rt) + ' s' : DASH}</div><div class="gap">${gap}</div></div>`;
+      <div>${!finished ? DASH : dist ? `${dist(rt).toFixed(1)} m <span class="muted small">in ${secs(rt)} s</span>` : secs(rt) + ' s'}</div><div class="gap">${gap}</div></div>`;
   }).join('');
 }
 
 function place(t) {
-  const k = EVENTS[$('event').value].k;
+  const { k, metres } = EVENTS[$('event').value];
   raceTimes().forEach(({ p, t: rt }) => {
     if (rt == null) return;
     const progress = Math.min(1, (t / rt) ** k);
     $('car-' + p.series).style.setProperty('--p', progress);
-    $('tag-' + p.series).textContent = progress >= 1 ? secs(rt) : '';
+    $('tag-' + p.series).textContent = progress < 1 ? '' : metres ? metres(rt).toFixed(1) + ' m' : secs(rt);
   });
   $('clock').textContent = secs(t);
 }
@@ -824,7 +836,9 @@ $('share').addEventListener('click', async () => {
   }
 });
 // A share link pasted into an open tab only changes the hash. saveHash uses replaceState, which never fires this.
-addEventListener('hashchange', () => { picks = []; replacing = null; restoreHash(); });
+// a link opened while the app is still starting waits for the catalogue and database list, instead of being dropped
+// a newer link wins over one still loading, and a failed start never blocks later links
+addEventListener('hashchange', () => started.catch(() => {}).then(() => { picks = []; replacing = null; return restoreHash(); }));
 
 $('event').innerHTML = Object.entries(EVENTS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
 $('env').innerHTML = Object.entries(ENVS).map(([k, v]) => `<option value="${k}">${v.label}</option>`).join('');
@@ -901,7 +915,7 @@ setUnits(metric);
 renderSaved();
 
 /* ---------- start ---------- */
-Promise.all([
+const started = Promise.all([
   fetch('/data/cars.json').then(r => r.json()).then(models => { FEATURED = flatten(models); }),
   api('db/meta').then(m => { meta = m; }).catch(() => { /* no database: Featured and US register still work */ }),
 ]).then(async () => {
